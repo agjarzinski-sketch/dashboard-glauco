@@ -1,0 +1,1683 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Gastos — Glauco 2026</title>
+<style>
+/* Fallback sem Google Fonts para compatibilidade com preview */
+
+/* ── PAINÉIS COLAPSÁVEIS ─────────────────────────────────────────── */
+.ds-panel {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.ds-panel-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 16px;
+  cursor: default;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.02);
+  user-select: none;
+}
+
+.ds-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ds-panel-controls { display: flex; gap: 4px; }
+
+.ds-toggle-btn {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all .15s;
+  padding: 0; line-height: 1;
+}
+
+.ds-toggle-btn:hover {
+  border-color: var(--nu);
+  color: var(--nu-light);
+  background: rgba(139,92,246,.1);
+}
+
+.ds-panel-body { padding: 16px; }
+
+.ds-panel.is-collapsed .ds-panel-body { display: none !important; }
+.ds-panel.is-collapsed { margin-bottom: 8px; }
+.ds-panel.is-collapsed .ds-panel-bar {
+  border-bottom: none;
+  border-radius: 14px;
+}
+
+.cats-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.grid-2 > .ds-panel { margin-bottom: 0; }
+
+/* ── CARDS REORDENÁVEIS ──────────────────────────────────────────── */
+.sortable-card {
+  position: relative;
+}
+.card-arrows {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  opacity: 0.35;
+  transition: opacity .2s;
+  z-index: 10;
+}
+.sortable-card:hover .card-arrows { opacity: 1; }
+.card-arrow {
+  width: 18px; height: 18px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 10px;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; line-height: 1;
+  transition: all .15s;
+}
+.card-arrow:hover {
+  border-color: var(--nu);
+  color: var(--nu-light);
+  background: rgba(139,92,246,.15);
+}
+.card-arrow:disabled {
+  opacity: .2;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* ── PAINEL DE ARQUIVOS IMPORTADOS ────────────────────────────────── */
+#panel-arquivos .ds-panel-body { padding: 12px 16px; }
+
+.arquivo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+
+.arquivo-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+  transition: border-color .2s;
+}
+
+.arquivo-card:hover { border-color: var(--nu); }
+.arquivo-card.tipo-cc  { border-left: 3px solid var(--blue); }
+.arquivo-card.tipo-ct  { border-left: 3px solid var(--green); }
+
+.arquivo-nome {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: .3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.arquivo-periodo {
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.arquivo-status {
+  font-size: 9px;
+  padding: 2px 7px;
+  border-radius: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: fit-content;
+  margin-top: 2px;
+}
+
+.status-ok   { background: rgba(34,197,94,.12);  color: var(--green); }
+.status-warn { background: rgba(245,158,11,.12); color: var(--amber); }
+.status-sub  { background: rgba(139,92,246,.12); color: var(--nu-light); }
+
+.arquivo-badge {
+  position: absolute;
+  top: 8px; right: 8px;
+  font-size: 14px;
+}
+
+</style>
+
+<script>
+// Chart.js minimalista — apenas Donut
+class Chart {
+  constructor(ctx, config) {
+    this.ctx = ctx; this.config = config;
+    this.canvas = ctx.canvas;
+    this.draw();
+  }
+  draw() {
+    const {data, options} = this.config;
+    const ds = data.datasets[0];
+    const total = ds.data.reduce((a,b)=>a+b,0);
+    const cx=this.canvas.width/2, cy=this.canvas.height/2;
+    const r=Math.min(cx,cy)*0.85, ri=r*(options.cutout?parseFloat(options.cutout)/100:0.5);
+    const ctx2=this.ctx; ctx2.clearRect(0,0,this.canvas.width,this.canvas.height);
+    let angle=-Math.PI/2;
+    ds.data.forEach((v,i)=>{
+      const slice=(v/total)*Math.PI*2;
+      ctx2.beginPath();ctx2.moveTo(cx,cy);
+      ctx2.arc(cx,cy,r,angle,angle+slice);ctx2.closePath();
+      ctx2.fillStyle=ds.backgroundColor[i];ctx2.fill();
+      if(ds.borderWidth){ctx2.strokeStyle=ds.borderColor||'#fff';ctx2.lineWidth=ds.borderWidth;ctx2.stroke();}
+      angle+=slice;
+    });
+    // Buraco
+    ctx2.beginPath();ctx2.arc(cx,cy,ri,0,Math.PI*2);
+    ctx2.fillStyle='#16161a';ctx2.fill();
+  }
+  destroy(){}
+}
+</script>
+<style>
+:root{--bg:#0d0d0f;--surface:#16161a;--surface2:#1e1e24;--border:#2a2a35;--nu:#8b5cf6;--nu-light:#a78bfa;--green:#22c55e;--red:#ef4444;--amber:#f59e0b;--blue:#3b82f6;--text:#f0f0f5;--muted:#6b6b80;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;min-height:100vh;padding:32px 24px;}
+.header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:28px;padding-bottom:22px;border-bottom:1px solid var(--border);}
+.header-left h1{font-family:Arial,sans-serif;font-size:26px;font-weight:800;letter-spacing:-.5px;}
+.header-left h1 span{color:var(--nu-light);}
+.header-left p{font-size:11px;color:var(--muted);margin-top:4px;}
+.month-tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;}
+.month-tab{padding:7px 18px;border-radius:7px;border:none;background:transparent;color:var(--muted);font-family:Arial,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;}
+.month-tab.active{background:var(--nu);color:#fff;}
+.month-tab:hover:not(.active){color:var(--text);}
+.alert{background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.25);border-radius:10px;padding:10px 16px;font-size:11px;color:var(--amber);margin-bottom:20px;}
+.section-title{font-family:Arial,sans-serif;font-size:12px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:10px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+.grid-4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:18px;position:relative;}
+.card-label{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
+.card-value{font-family:Arial,sans-serif;font-size:22px;font-weight:700;letter-spacing:-.5px;}
+.card-value.green{color:var(--green);}.card-value.red{color:var(--red);}.card-value.purple{color:var(--nu-light);}.card-value.amber{color:var(--amber);}
+.card-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+.card-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:3px 8px;border-radius:20px;margin-top:6px;font-weight:500;}
+.badge-green{background:rgba(34,197,94,.15);color:var(--green);}.badge-red{background:rgba(239,68,68,.15);color:var(--red);}
+
+/* Tabela semanal */
+.week-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:22px;overflow:hidden;}
+.week-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+.week-header-title{font-family:Arial,sans-serif;font-size:13px;font-weight:700;}
+.week-filters{display:flex;align-items:center;gap:7px;flex-wrap:wrap;}
+.fl{font-size:10px;color:var(--muted);letter-spacing:.5px;}
+.filter-select,.filter-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'Courier New',monospace;font-size:11px;padding:5px 9px;border-radius:7px;cursor:pointer;outline:none;}
+.filter-select:focus,.filter-input:focus{border-color:var(--nu);}
+.fbtn{padding:5px 11px;border-radius:7px;border:1px solid var(--border);background:var(--surface2);color:var(--muted);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
+.fbtn:hover,.fbtn.active{border-color:var(--nu);color:var(--nu-light);background:rgba(139,92,246,.08);}
+.fbtn.clear{border-color:rgba(239,68,68,.3);color:var(--red);background:rgba(239,68,68,.05);}
+.week-summary{display:flex;gap:22px;padding:10px 18px;background:var(--surface2);border-bottom:1px solid var(--border);}
+.wsi{display:flex;flex-direction:column;gap:2px;}
+.wsi-lbl{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);}
+.wsi-val{font-family:Arial,sans-serif;font-size:14px;font-weight:700;}
+
+/* Tabelas */
+.tbl{width:100%;border-collapse:collapse;}
+.tbl th{font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);text-align:left;padding:8px 14px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.tbl td{font-size:12px;padding:9px 14px;border-bottom:1px solid rgba(42,42,53,.5);vertical-align:middle;}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:var(--surface2);}
+.tbl-scroll{overflow-y:auto;}.tbl-scroll::-webkit-scrollbar{width:3px;}.tbl-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+.tx-date{color:var(--muted);font-size:11px;white-space:nowrap;}
+.tx-title{color:var(--text);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.tx-cat{font-size:10px;padding:2px 8px;border-radius:20px;background:var(--surface2);color:var(--muted);white-space:nowrap;}
+.tx-orig{font-size:10px;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+.occ{background:rgba(139,92,246,.12);color:var(--nu-light);}.odb{background:rgba(59,130,246,.12);color:#60a5fa;}
+.tx-val{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;}
+.tx-val.neg{color:var(--red);}.tx-val.pos{color:var(--green);}
+.tx-venc{font-size:10px;color:var(--nu-light);padding:2px 8px;background:rgba(139,92,246,.1);border-radius:20px;white-space:nowrap;}
+.tx-day-total{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-family:Arial,sans-serif;font-weight:700;font-size:12px;color:var(--amber);}
+.day-div td{background:rgba(139,92,246,.05);font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:var(--nu-light);padding:6px 14px;border-top:1px solid rgba(139,92,246,.15)!important;}
+.empty-row td{text-align:center;color:var(--muted);font-size:12px;padding:24px;}
+.fatura-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.fatura-row:last-child{border-bottom:none;}.fatura-row.total{font-family:Arial,sans-serif;font-weight:700;font-size:14px;padding-top:10px;}
+.rdb-card{background:linear-gradient(135deg,#1a1025 0%,#16161a 100%);border:1px solid rgba(139,92,246,.3);border-radius:14px;padding:18px;position:relative;overflow:hidden;}
+.rdb-bar-bg{height:7px;background:var(--border);border-radius:8px;overflow:hidden;margin:12px 0 5px;}
+.rdb-bar-fill{height:100%;background:linear-gradient(90deg,var(--nu),var(--nu-light));border-radius:8px;}
+.rdb-labels{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);}
+.rdb-stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;}
+.rdb-stat-label{font-size:9px;color:var(--muted);letter-spacing:.5px;}
+.rdb-stat-val{font-family:Arial,sans-serif;font-size:15px;font-weight:700;margin-top:2px;}
+.cat-list{display:flex;flex-direction:column;gap:9px;}
+.cat-row{display:flex;align-items:center;gap:8px;}
+.cat-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.cat-name{font-size:11px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cat-bar-wrap{flex:2;height:3px;background:var(--border);border-radius:4px;overflow:hidden;}
+.cat-bar{height:100%;border-radius:4px;}
+.cat-val{font-size:11px;color:var(--muted);text-align:right;min-width:80px;font-variant-numeric:tabular-nums;}
+.chart-wrap{position:relative;height:200px;}
+.view-tabs{display:flex;gap:6px;margin-bottom:14px;}
+.view-tab{padding:6px 14px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-family:'Courier New',monospace;font-size:11px;cursor:pointer;transition:all .2s;}
+.view-tab.active{border-color:var(--nu);color:var(--nu-light);background:rgba(139,92,246,.08);}
+.foot-note{font-size:10px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--border);}
+@keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.card,.rdb-card,.week-card{animation:fadeUp .35s ease both;}
+</style>
+</head>
+<body>
+
+<!-- ══ PAINEL SITUAÇÃO ATUAL ════════════════════════════════════════════════ -->
+<div class="ds-panel" id="panel-situacao" style="background:linear-gradient(135deg,#1a1025 0%,#13131a 100%);border-color:rgba(139,92,246,.35)">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">⚡ Situação Atual
+      <span id="dataAtual" style="font-size:9px;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:20px;border:1px solid var(--border);margin-left:8px;letter-spacing:.5px;text-transform:none;font-weight:400"></span>
+    </span>
+    <div class="ds-panel-controls">
+      <span style="font-size:10px;color:var(--muted);margin-right:6px">Ref: 23/04/2026</span>
+      <button class="ds-toggle-btn" onclick="togglePanel('panel-situacao',this)" title="Colapsar/Expandir">▲</button>
+    </div>
+  </div>
+  <div class="ds-panel-body" style="padding:14px 16px">
+    <div style="position:absolute;top:-40px;right:-40px;width:180px;height:180px;background:radial-gradient(circle,rgba(139,92,246,.12) 0%,transparent 70%);border-radius:50%;pointer-events:none"></div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px" id="painelCards"></div>
+    <div id="painelAlerta" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<!-- ══ PAINEL: ARQUIVOS IMPORTADOS ══════════════════════════════════════════ -->
+<div class="ds-panel is-collapsed" id="panel-arquivos">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">📁 Arquivos Importados</span>
+    <div class="ds-panel-controls">
+      <button class="ds-toggle-btn" onclick="togglePanel('panel-arquivos',this)" title="Expandir">▼</button>
+    </div>
+  </div>
+  <div class="ds-panel-body">
+    <div class="arquivo-grid" id="arquivoGrid"></div>
+    <div style="margin-top:10px;font-size:10px;color:var(--muted)">
+      🔵 Cartão de Crédito &nbsp;|&nbsp; 🟢 Conta Corrente &nbsp;|&nbsp;
+      ✅ Auditado pelo PDF &nbsp;|&nbsp; ⏳ PDF pendente &nbsp;|&nbsp; 🔄 Substituído (período repetido)
+    </div>
+  </div>
+</div>
+
+<!-- ══ HEADER + ALERT ════════════════════════════════════════════════════════ -->
+<div class="header">
+  <div class="header-left">
+    <h1>Controle de Gastos <span>2.0</span></h1>
+    <p>ANGELO GLAUCO JARZINSKI · NUBANK · CONTA 59962602-0</p>
+  </div>
+  <div class="month-tabs">
+    <button class="month-tab" onclick="setMonth('mar',this)">MAR 2026</button>
+    <button class="month-tab" onclick="setMonth('abr',this)">ABR 2026</button>
+    <button class="month-tab active" onclick="setMonth('mai',this)">MAI 2026</button>
+  </div>
+</div>
+
+<div class="alert">⚠ "Outros lançamentos" não identificados: <strong>R$ 138,66</strong> (março) e <strong>R$ 156,30</strong> (abril) — são compras via NuPay/KeetaBR. &nbsp;|&nbsp; 📅 Fatura de maio fecha em <strong>14/05/2026</strong> — dados até 24/04.</div>
+
+<!-- Alerta dinâmico de auditoria de continuidade de saldos -->
+<div id="alertaAuditoriaSaldos" style="margin-bottom:16px"></div>
+
+<!-- ══ PAINEL: VISÃO GERAL DO MÊS ════════════════════════════════════════════ -->
+<div class="ds-panel" id="panel-kpis">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">📊 Visão Geral do Mês</span>
+    <div class="ds-panel-controls">
+      <button class="ds-toggle-btn" onclick="togglePanel('panel-kpis',this)" title="Colapsar/Expandir">▲</button>
+    </div>
+  </div>
+  <div class="ds-panel-body">
+    <div class="grid-4" id="kpis"></div>
+  </div>
+</div>
+
+<!-- ══ PAINEL: MOVIMENTAÇÕES DA SEMANA ═══════════════════════════════════════ -->
+<div class="ds-panel" id="panel-semana">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">📅 Movimentações da Semana</span>
+    <div class="ds-panel-controls">
+      <button class="ds-toggle-btn" onclick="expandAllWeek(true)" title="Expandir todos">▼</button>
+      <button class="ds-toggle-btn" onclick="expandAllWeek(false)" title="Recolher todos">▶</button>
+      <button class="ds-toggle-btn" onclick="togglePanel('panel-semana',this)" title="Colapsar/Expandir">▲</button>
+    </div>
+  </div>
+  <div class="ds-panel-body" style="padding:0">
+    <div class="week-header" style="padding:14px 16px;border-bottom:1px solid var(--border)">
+      <div class="week-filters">
+        <span class="fl">SEMANA</span>
+        <select class="filter-select" id="selSemana" onchange="renderSemana()"></select>
+        <span class="fl">ORIGEM</span>
+        <button class="fbtn active" id="bOT" onclick="setOrigem('todos',this)">Todos</button>
+        <button class="fbtn" id="bOC" onclick="setOrigem('cc',this)">Cartão</button>
+        <button class="fbtn" id="bOD" onclick="setOrigem('db',this)">Débito</button>
+        <span class="fl">TIPO</span>
+        <button class="fbtn active" id="bTT" onclick="setTipo('todos',this)">Todos</button>
+        <button class="fbtn" id="bTE" onclick="setTipo('entrada',this)">Entradas</button>
+        <button class="fbtn" id="bTS" onclick="setTipo('saida',this)">Saídas</button>
+        <span class="fl">BUSCA</span>
+        <input class="filter-input" id="inputBusca" placeholder="descrição..." oninput="renderSemana()" style="width:120px">
+        <button class="fbtn clear" onclick="limparFiltros()">✕ Limpar</button>
+      </div>
+    </div>
+    <div id="weekSummary" class="week-summary"></div>
+      <div id="weekAudit"></div>
+    <div class="tbl-scroll" style="max-height:300px">
+      <table class="tbl" id="weekTable"></table>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAINEL: FATURA + RDB ══════════════════════════════════════════════════ -->
+<div class="grid-2">
+  <div class="ds-panel" id="panel-fatura">
+    <div class="ds-panel-bar">
+      <span class="ds-panel-title">💳 Fatura do Cartão</span>
+      <div class="ds-panel-controls">
+        <button class="ds-toggle-btn" onclick="togglePanel('panel-fatura',this)" title="Colapsar/Expandir">▲</button>
+      </div>
+    </div>
+    <div class="ds-panel-body">
+      <div id="faturaCard"></div>
+    </div>
+  </div>
+  <div class="ds-panel" id="panel-rdb" style="background:linear-gradient(135deg,#1a1025 0%,#16161a 100%);border-color:rgba(139,92,246,.3)">
+    <div class="ds-panel-bar" style="background:rgba(139,92,246,.04);border-color:rgba(139,92,246,.2)">
+      <span class="ds-panel-title">💰 RDB · Nu Limite Garantido</span>
+      <div class="ds-panel-controls">
+        <button class="ds-toggle-btn" onclick="togglePanel('panel-rdb',this)" title="Colapsar/Expandir">▲</button>
+      </div>
+    </div>
+    <div class="ds-panel-body">
+      <div id="rdbCard" style="border:none;padding:0;background:transparent"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ PAINEL: CATEGORIAS + DONUT ════════════════════════════════════════════ -->
+<div class="ds-panel" id="panel-cats">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">🏷 Gastos por Categoria</span>
+    <div class="ds-panel-controls">
+      <button class="ds-toggle-btn" onclick="togglePanel('panel-cats',this)" title="Colapsar/Expandir">▲</button>
+    </div>
+  </div>
+  <div class="ds-panel-body cats-body">
+    <div class="cat-list" id="catList"></div>
+    <div class="chart-wrap" style="height:220px"><canvas id="donutChart" style="width:100%;height:100%"></canvas></div>
+  </div>
+</div>
+
+<!-- ══ PAINEL: LANÇAMENTOS ════════════════════════════════════════════════════ -->
+<div class="ds-panel" id="panel-tx">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">📋 Lançamentos do Cartão</span>
+    <div class="ds-panel-controls">
+      <button class="ds-toggle-btn" onclick="expandAllTx(true)" title="Expandir todos">▼</button>
+      <button class="ds-toggle-btn" onclick="expandAllTx(false)" title="Recolher todos">▶</button>
+      <button class="ds-toggle-btn" onclick="togglePanel('panel-tx',this)" title="Colapsar/Expandir">▲</button>
+    </div>
+  </div>
+  <div class="ds-panel-body">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div class="view-tabs" style="margin-bottom:0">
+        <button class="view-tab active" onclick="setView('cartao',this)">Cartão de Crédito</button>
+        <button class="view-tab" onclick="setView('debito',this)">Débito / Conta</button>
+        <button class="view-tab" onclick="setView('consolidado',this)">🔀 Consolidado (CC + Débito)</button>
+      </div>
+    </div>
+    <div class="tbl-scroll" style="max-height:380px">
+      <table class="tbl" id="txTable"></table>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Utilitários ──────────────────────────────────────────────────────────────
+const fmt=v=>'R$ '+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+const parseDate=s=>{if(!s)return null;if(s.includes('-')){const[y,m,d]=s.split('-');return new Date(+y,+m-1,+d);}const[d,m,y]=s.split('/');return new Date(+y,+m-1,+d);};
+const fmtDate=(d,opt={day:'2-digit',month:'2-digit'})=>d.toLocaleDateString('pt-BR',opt);
+
+// Extrai parcela (ex: "9/12") e retorna {titulo, parcela}
+function parseTitulo(t){
+  const m = (t||'').match(/[-–]\s*Parcela\s+(\d+\/\d+)/i);
+  if(m) return {titulo: t.replace(/[-–]\s*Parcela\s+\d+\/\d+/i,'').replace(/\s+$/,''), parcela: m[1]};
+  return {titulo: t, parcela: null};
+}
+
+function categorize(t){
+  t=(t||'').toLowerCase();
+  if(/uber|uberrides|dl\*99|99 ride/.test(t))return'Transporte';
+  if(/ifd\*|ifood|negri|burger|hamburger|restaurante|bar e|pastel|lanchonete|cafes|bodega|logoff|brett|pinky|helix|tradicional|primos|pao com|osnir|jeroni|cepam|boi garrote|gardens|minuto pa/.test(t))return'Alimentação/Delivery';
+  if(/emporio|shopping frutas|dia brasil|carrefour|oxxo|banca|fs comercio|keeta|prodata/.test(t))return'Mercado/Compras';
+  if(/netflix|spotify|amazon prime|claude|chatgpt|openai|panorama|tradingview|tactiq|ifood club|amazon ad/.test(t))return'Assinaturas';
+  if(/amazon marketplace|amazonmktplc|casasbahia|fastsho/.test(t))return'Compras Online';
+  if(/dr\. consulta|drconsulta|panaceia|droga|clin fis|zacaralli|faria yassuda/.test(t))return'Saúde';
+  if(/rosaines|omolavanderia|barbear|neilson|jp sapataria/.test(t))return'Serviços Pessoais';
+  if(/vivo|totalpass|total pass|administrativo/.test(t))return'Contas Fixas';
+  if(/parcela/.test(t))return'Parcelas';
+  if(/iof/.test(t))return'IOF';
+  if(/rdb/.test(t))return'RDB';
+  if(/empr[eé]stimo|dep[oó]sito de/.test(t))return'Empréstimo';
+  if(/pix recebido|transfer[eê]ncia recebida/.test(t))return'Pix Recebido';
+  if(/pix|transfer/.test(t))return'Pix/Transferência';
+  if(/fatura/.test(t))return'Pgto Fatura';
+  return'Outros';
+}
+
+// ── Dataset completo ─────────────────────────────────────────────────────────
+const ALL_TX=[
+  // CARTÃO MARÇO venc 21/03
+  ...[ ['2026-03-13',54.90,'Panaceia Restaurante L'],['2026-03-13',15.98,'Uber* Trip'],['2026-03-13',9.95,'Uber* Trip'],
+    ['2026-03-12',30.50,'Rosainesferreira'],['2026-03-12',47.89,'Ifd*Augusto Ascari Fil'],['2026-03-11',35.00,'Nova Comenalle'],
+    ['2026-03-10',10.94,'Uber Uber *Trip Help.U'],['2026-03-10',35.00,'Nova Comenalle'],['2026-03-10',82.66,'KeetaBR - NuPay'],
+    ['2026-03-10',40.00,'Rosainesferreira'],['2026-03-09',15.96,'Uber* Trip'],['2026-03-09',99.00,'Floriculturabeija'],
+    ['2026-03-09',31.15,'Uber Uber *Trip Help.U'],['2026-03-09',8.99,'Centro Automotivo Blue'],['2026-03-09',90.89,'Ifd*Negri Solucoes em'],
+    ['2026-03-09',72.92,'Tactiq.Io'],['2026-03-09',3.84,'IOF Openai Chatgpt Subscr'],['2026-03-09',109.99,'Openai *Chatgpt Subscr'],
+    ['2026-03-09',2.55,'IOF Tactiq.Io'],['2026-03-08',7.81,'Emporio do Gaucho'],['2026-03-07',59.90,'Netflix Entretenimento'],
+    ['2026-03-07',71.00,'KeetaBR - NuPay'],['2026-03-06',53.96,'Uber* Trip'],['2026-03-06',50.00,'Cafesaopedro'],
+    ['2026-03-06',9.93,'Uber Uber *Trip Help.U'],['2026-03-06',100.00,'Brett Bar e Restaurant'],['2026-03-06',51.96,'Minuto Pa'],
+    ['2026-03-06',78.89,'Ifd*Negri Solucoes em'],['2026-03-05',36.00,'Banca Ezequiel'],['2026-03-05',18.97,'Uber Uber *Trip Help.U'],
+    ['2026-03-05',24.08,'Oxxo Mandaqui'],['2026-03-04',33.90,'Restaurante Gardens'],['2026-03-03',23.90,'Dm *Spotify'],
+    ['2026-03-03',13.98,'Uber Uber *Trip Help.U'],['2026-03-02',34.98,'Centro Automotivo Piem'],['2026-03-02',23.95,'Uber Uber *Trip Help.U'],
+    ['2026-03-02',28.90,'Dl*99 Ride'],['2026-03-02',10.00,'Amazon Ad Free For Pri'],['2026-03-01',5.90,'Banca Vila Prudente'],
+    ['2026-03-01',82.79,'Ifd*Primos Burguer Ham'],['2026-03-01',5.95,'Ifd*Ifood Club'],['2026-03-01',8.15,'Emporio do Gaucho'],
+    ['2026-03-01',122.98,'Ifd*Pao Com Carne Hamb'],['2026-02-28',80.89,'Ifd*Osnir Hamburger'],['2026-02-28',119.90,'Totalpass'],
+    ['2026-02-28',17.00,'Banca Menezes'],['2026-02-27',82.00,'Jeronimoserrazul'],['2026-02-27',13.99,'Uber* Trip'],
+    ['2026-02-27',11.98,'Uber Uber *Trip Help.U'],['2026-02-27',10.00,'Jeronimoserrazul'],['2026-02-27',79.89,'Tradingviewm*Product'],
+    ['2026-02-26',20.00,'Rosainesferreira'],['2026-02-26',3.23,'Emporio do Gaucho'],['2026-02-26',33.90,'Restaurante Gardens'],
+    ['2026-02-25',8.12,'Emporio do Gaucho'],['2026-02-25',30.00,'Rosainesferreira'],['2026-02-25',42.98,'Uber Uber *Trip Help.U'],
+    ['2026-02-24',122.95,'Minuto Pa'],['2026-02-23',106.69,'Ifd*Pinky Burguer'],['2026-02-22',59.07,'Logoff Beer'],
+    ['2026-02-22',3.71,'Emporio do Gaucho'],['2026-02-22',19.90,'Banca Vila Prudente'],['2026-02-21',83.29,'Ifd*Helix Restaurantes'],
+    ['2026-02-21',13.98,'Uber Uber *Trip Help.U'],['2026-02-20',24.50,'Emporio do Gaucho'],['2026-02-20',7.90,'Banca Metro Paraiso'],
+    ['2026-02-20',33.90,'Restaurante Gardens'],['2026-02-19',19.90,'Banca Vila Prudente'],['2026-02-18',209.90,'Conta Vivo'],
+    ['2026-02-18',60.86,'Minuto Pa'],['2026-02-18',43.93,'Uber Uber *Trip Help.U'],['2026-02-18',9.90,'Panoramajonasesteves'],
+    ['2026-02-17',41.00,'Banca Nsa'],['2026-02-17',100.00,'Brett Bar e Restaurant'],['2026-02-17',234.84,'Valori *Bodega do Mach'],
+    ['2026-02-17',44.90,'Amazon Prime Canais'],['2026-02-16',124.63,'Logoff Beer'],['2026-02-16',15.24,'Centro Automotivo Piem'],
+    ['2026-02-16',15.94,'Uber Uber *Trip Help.U'],['2026-02-16',368.60,'Carrefour Lj 31 Pdv'],
+    ['2026-02-16',53.00,'Carrefour Lj 31 Pdv - Parcela 1/3'],['2026-02-16',17.94,'Uber Uber *Trip Help.U'],
+    ['2026-02-16',56.97,'Uber Uber *Trip Help.U'],['2026-02-15',90.98,'Ifd*Tradicional Tatuap'],
+    ['2026-02-15',15.00,'Brasil Paral*Brparalel - Parcela 1/12'],['2026-02-14',74.38,'Ifd*Mundo dos Cosmetic'],
+    ['2026-02-14',339.90,'Amazonmktplc*Lojaelect - Parcela 8/10'],['2026-02-14',14.97,'Uber Uber *Trip Help.U'],
+    ['2026-02-14',57.40,'Dr. Consulta - Parcela 4/10'],['2026-02-14',163.13,'00175 Lj Av Paulista - Parcela 2/3'],
+    ['2026-02-14',300.00,'Associacao Pro-Vida - Parcela 5/5'],['2026-02-14',88.09,'Www-Casasbahia-Com-Br - Parcela 8/10'],
+    ['2026-02-14',39.90,'Cartao Drconsulta - Parcela 4/6'],['2026-02-14',41.66,'Amazonmktplc*Dkkcalcad - Parcela 4/6'],
+    ['2026-02-14',70.89,'Ifd*Osnir Hamburger'],['2026-02-14',295.56,'Dia Brasil Lj'],
+    ['2026-02-14',53.48,'Amazonmktplc*Sandrinia - Parcela 4/6'],['2026-02-14',411.15,'Amazon Marketplace - Parcela 8/10'],
+    ['2026-02-14',306.83,'Santo Sofa - Parcela 7/12'],['2026-02-14',108.76,'Openai *Chatgpt Subscr'],
+    ['2026-02-14',83.33,'Clin Fis Zacaralli - Parcela 6/6'],['2026-02-14',94.85,'Fastsho*Cd33d2x*Fasts - Parcela 7/10'],
+    ['2026-02-14',15.97,'Uber Uber *Trip Help.U'],['2026-02-14',20.37,'Htm*Leandro Munhoz Mor - Parcela 9/12'],
+  ].map(([d,v,t])=>{const p=parseTitulo(t);return{data:d,valor:-v,titulo:p.titulo,parcela:p.parcela,origem:'cc',venc:'21/03/2026',cat:categorize(p.titulo)}}),
+
+  // CARTÃO ABRIL venc 21/04
+  ...[ ['2026-04-10',8.96,'Dl *Uberrides'],['2026-04-08',10.00,'Amazon Ad Free For Pri'],
+    ['2026-04-06',39.99,'Uber Uber *Trip Help.U'],['2026-04-02',112.81,'Claude.Ai Subscription'],
+    ['2026-04-02',3.94,'IOF Claude.Ai Subscription'],['2026-04-01',9.94,'Dl *Uberrides'],
+    ['2026-03-31',5.95,'Ifd*Ifood Club'],['2026-03-30',60.99,'Uber Uber *Trip Help.U'],['2026-03-30',1.63,'Uber* Trip'],
+    ['2026-03-29',10.34,'Uber Uber *Trip Help.U'],['2026-03-29',12.93,'Uber Uber *Trip Help.U'],
+    ['2026-03-29',22.97,'Dl*Uberrides'],['2026-03-29',18.99,'Dl *Uberrides'],
+    ['2026-03-26',6.14,'Emporio do Gaucho'],['2026-03-25',7.98,'Emporio do Gaucho'],
+    ['2026-03-23',87.65,'Shopping Frutas Guanab'],['2026-03-22',38.98,'Uber* Trip'],
+    ['2026-03-22',25.96,'Uber Uber *Trip Help.U'],['2026-03-22',87.89,'Ifd*Negri Solucoes em'],
+    ['2026-03-22',15.35,'Omolavanderia'],['2026-03-22',14.58,'Omolavanderia'],
+    ['2026-03-22',26.80,'Banca Vila Prudente'],['2026-03-22',170.14,'Shopping Frutas Guanab'],
+    ['2026-03-22',111.10,'Minuto Pa'],['2026-03-21',84.11,'Minuto Pa'],['2026-03-21',25.94,'Dl*Uberrides'],
+    ['2026-03-20',23.10,'Faria Yassuda'],['2026-03-20',100.00,'Brett Bar e Restaurant'],
+    ['2026-03-20',36.00,'Brett Bar e Restaurant'],['2026-03-19',151.74,'Cepam Food Service'],
+    ['2026-03-19',24.00,'Tabacaria Prudente'],['2026-03-18',9.90,'Panoramajonasesteves'],
+    ['2026-03-18',209.90,'Conta Vivo'],['2026-03-18',109.46,'Dia Brasil Lj'],
+    ['2026-03-17',78.15,'KeetaBR - NuPay'],['2026-03-17',44.90,'Amazon Prime Canais'],
+    ['2026-03-16',305.53,'Shopping Frutas Guanab'],['2026-03-15',4.90,'Emporio do Gaucho'],
+    ['2026-03-15',103.78,'Minuto Pa'],['2026-03-15',42.70,'Banca Vila Prudente'],
+    ['2026-03-15',15.43,'Emporio do Gaucho'],['2026-03-15',10.94,'Uber Uber *Trip Help.U'],
+    ['2026-03-14',339.90,'Amazonmktplc*Lojaelect - Parcela 9/10'],['2026-03-14',306.83,'Santo Sofa - Parcela 8/12'],
+    ['2026-03-14',411.15,'Amazon Marketplace - Parcela 9/10'],['2026-03-14',57.40,'Dr. Consulta - Parcela 5/10'],
+    ['2026-03-14',94.85,'Fastsho*Cd33d2x*Fasts - Parcela 8/10'],['2026-03-14',88.09,'Www-Casasbahia-Com-Br - Parcela 9/10'],
+    ['2026-03-14',20.37,'Htm*Leandro Munhoz Mor - Parcela 10/12'],['2026-03-14',163.13,'00175 Lj Av Paulista - Parcela 3/3'],
+    ['2026-03-14',94.60,'Ifd*Negri Solucoes em'],['2026-03-14',39.90,'Cartao Drconsulta - Parcela 5/6'],
+    ['2026-03-14',41.66,'Amazonmktplc*Dkkcalcad - Parcela 5/6'],['2026-03-14',78.15,'KeetaBR - NuPay'],
+    ['2026-03-14',53.00,'Carrefour Lj 31 Pdv - Parcela 2/3'],['2026-03-14',53.48,'Amazonmktplc*Sandrinia - Parcela 5/6'],
+  ].map(([d,v,t])=>{const p=parseTitulo(t);return{data:d,valor:-v,titulo:p.titulo,parcela:p.parcela,origem:'cc',venc:'21/04/2026',cat:categorize(p.titulo)}}),
+
+  // CARTÃO MAIO venc 21/05 — CSV atualizado até 24/04 (61 transações)
+  ...[ ['2026-04-14',53.00,'Carrefour Lj 31 Pdv - Parcela 3/3'],
+    ['2026-04-14',339.90,'Amazonmktplc*Lojaelect - Parcela 10/10'],
+    ['2026-04-14',53.48,'Amazonmktplc*Sandrinia - Parcela 6/6'],
+    ['2026-04-14',306.83,'Santo Sofa - Parcela 9/12'],
+    ['2026-04-14',411.15,'Amazon Marketplace - Parcela 10/10'],
+    ['2026-04-14',41.66,'Amazonmktplc*Dkkcalcad - Parcela 6/6'],
+    ['2026-04-14',94.85,'Fastsho*Cd33d2x*Fasts - Parcela 9/10'],
+    ['2026-04-14',88.09,'Www-Casasbahia-Com-Br - Parcela 10/10'],
+    ['2026-04-14',20.37,'Htm*Leandro Munhoz Mor - Parcela 11/12'],
+    ['2026-04-14',39.90,'Cartao Drconsulta - Parcela 6/6'],
+    ['2026-04-14',57.40,'Dr. Consulta - Parcela 6/10'],
+    ['2026-04-17',72.81,'Tactiq.Io'],['2026-04-17',23.90,'Dm *Spotify'],
+    ['2026-04-17',2.54,'IOF de compra internacional'],
+    ['2026-04-18',366.65,'Aramis Analia Franco - Parcela 1/6'],
+    ['2026-04-18',209.90,'Conta Vivo'],['2026-04-18',93.18,'Inditex Brasil - Parcela 1/3'],
+    ['2026-04-18',9.90,'Panoramajonasesteves'],['2026-04-18',23.98,'Dl*Uberrides'],
+    ['2026-04-18',40.00,'Jpsapataria'],['2026-04-18',9.99,'Cepam Food Service'],
+    ['2026-04-18',94.90,'Flexshopcomercial'],['2026-04-18',30.30,'Banca Vila Prudente'],
+    ['2026-04-18',55.00,'Jpsapataria'],['2026-04-18',69.90,'00033 Sh Analia Franc - Parcela 1/2'],
+    ['2026-04-18',186.12,'Boi Garrote'],['2026-04-18',25.95,'Dl*Uberrides'],
+    ['2026-04-18',82.18,'Centauro Ce117 - Parcela 1/7'],
+    ['2026-04-19',29.16,'Omolavanderia'],['2026-04-19',103.37,'Openai *Chatgpt Subscr'],
+    ['2026-04-19',225.44,'Dorabar'],['2026-04-19',33.12,'Omolavanderia'],
+    ['2026-04-19',310.81,'Mambo'],['2026-04-19',57.88,'Raia1998'],
+    ['2026-04-19',18.99,'Dl*Uberrides'],['2026-04-19',33.95,'Dl*Uberrides'],
+    ['2026-04-19',3.61,'IOF de compra internacional'],['2026-04-19',8.96,'Uber Uber *Trip Help.U'],
+    ['2026-04-20',221.48,'Shopping Frutas Guanab'],['2026-04-20',25.96,'Igmarketspltda'],
+    ['2026-04-20',13.00,'Paulo Komesu'],['2026-04-20',9.99,'Auto Posto Jardim Avel'],
+    ['2026-04-21',531.18,'Claude.Ai Subscription'],['2026-04-21',23.40,'Banca Vila Prudente'],
+    ['2026-04-21',18.59,'IOF de compra internacional'],
+    ['2026-04-22',21.95,'Dl*Uberrides'],['2026-04-22',23.98,'Dl*Uberrides'],
+    ['2026-04-22',33.40,'Carrefour Tte'],
+    ['2026-04-23',44.10,'99app *99app'],['2026-04-23',30.00,'Auto Posto'],
+    ['2026-04-23',16.11,'Oxxo Pitta'],
+    ['2026-04-24',23.94,'Dl *Uberrides'],['2026-04-24',14.32,'3 Fontes Lavanderia'],
+    ['2026-04-24',34.90,'Restaurante Gardens'],['2026-04-24',27.00,'Rosainesferreira'],
+    ['2026-04-24',29.31,'Mercado*Mercadolivre'],['2026-04-24',23.94,'Dl *Uberrides'],
+    ['2026-04-24',36.00,'Banca Rosa Ines Ferrei'],['2026-04-24',27.08,'Igmarketspltda'],
+    ['2026-04-24',143.51,'7k Burger'],['2026-04-24',18.00,'Auto Posto'],
+  ].map(([d,v,t])=>{const p=parseTitulo(t);return{data:d,valor:-v,titulo:p.titulo,parcela:p.parcela,origem:'cc',venc:'21/05/2026',cat:categorize(p.titulo)}}),
+
+  // CONTA CORRENTE MARÇO
+  ...[ ['2026-03-02',10.77,'Crédito em conta'],['2026-03-06',-50.00,'Compra no débito - PRODATA'],
+    ['2026-03-06',-44.49,'Compra no débito - DROGA LESTE LJ85'],
+    ['2026-03-07',1227.64,'Pix Recebido - Gowd Inst.'],['2026-03-07',-200.00,'Pix - JOAO JOSE JARZINSKI'],
+    ['2026-03-07',-1000.00,'Aplicação RDB'],['2026-03-13',4853.53,'Transferência Recebida - HERMES CAPITAL'],
+    ['2026-03-14',7.91,'Crédito em conta'],['2026-03-14',-2000.00,'Aplicação RDB'],
+    ['2026-03-16',-2088.12,'Pix - Alexandre Ricosti Casado Junior'],['2026-03-16',-225.00,'Pix - Matheus Sardinha'],
+    ['2026-03-16',-38.00,'Pix - V A Sardinha Embalagens'],['2026-03-16',-100.00,'Compra no débito - TARIFA ATM TMOB'],
+    ['2026-03-23',9.87,'Crédito em conta'],['2026-03-23',-300.00,'Pix - MONALISA MELANIA NEFERTI'],
+    ['2026-03-24',-49.00,'Compra no débito - RosaInesFerreira'],
+    ['2026-03-24',1232.55,'Transferência Recebida - Alexandre Ricosti'],
+    ['2026-03-26',-91.02,'Compra no débito - KeetaBR NuPay'],['2026-03-27',-11.25,'Compra no débito - ADMINISTRATIVO'],
+    ['2026-03-28',-119.90,'Pix - TOTAL PASS'],['2026-03-28',-26.70,'Compra no débito - BANCA VILA PRUDENTE'],
+    ['2026-03-28',-85.00,'Compra no débito - TudoEmPastel'],['2026-03-28',-100.00,'Aplicação RDB'],
+    ['2026-03-29',-133.96,'Compra no débito - MINUTO PA 6170'],['2026-03-30',-5.38,'Compra no débito - EMPORIO DO GAUCHO'],
+    ['2026-03-30',-149.82,'Resgate de empréstimo'],['2026-03-31',-12.08,'Compra no débito - EMPORIO DO GAUCHO'],
+    ['2026-03-31',-50.00,'Compra no débito - RosaInesFerreira'],
+  ].map(([d,v,t])=>({data:d,valor:v,titulo:t,parcela:null,origem:'db',venc:null,cat:categorize(t)})),
+
+  // CONTA CORRENTE ABRIL
+  ...[ ['2026-04-01',-10.88,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-01',-50.00,'Compra no débito - PRODATA'],
+    ['2026-04-01',-50.00,'Pix - JOAO JOSE JARZINSKI'],['2026-04-01',-120.00,'Aplicação RDB'],
+    ['2026-04-01',-42.40,'Compra no débito - RESTAURANTE GARDENS'],['2026-04-02',-100.94,'Compra no débito - DIA BRASIL LJ 508'],
+    ['2026-04-03',-14.11,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-03',-41.48,'Compra no débito - OXXO VERDAO'],
+    ['2026-04-03',-8.90,'Compra no débito - REDECINE BRA'],['2026-04-03',-5.00,'Compra no débito - Josejoao'],
+    ['2026-04-04',1000.00,'Pix Recebido - MIRTES DE OLIVEIRA'],['2026-04-04',-45.00,'Compra no débito - MP BARBEARIAMARC'],
+    ['2026-04-04',-4.90,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-04',-142.24,'Compra no débito - FS COMERCIO ALIMENT'],
+    ['2026-04-04',-61.17,'Compra no débito - MINUTO PA 6170'],['2026-04-05',-9.98,'Compra no débito - CENTRO AUTOMOTIVO PIEM'],
+    ['2026-04-05',-2.99,'Compra no débito - OXXO GALERO'],['2026-04-05',-44.00,'Compra no débito - NEILSON LIMA TEIXEIR'],
+    ['2026-04-05',-108.98,'Compra no débito - ESTACAO CHOCOLATE'],['2026-04-05',-17.00,'Compra no débito - LANCHONETE ANDRADE'],
+    ['2026-04-05',-20.49,'Compra no débito - CENTRO AUTOMOTIVO ACC'],['2026-04-05',-40.00,'Aplicação RDB'],
+    ['2026-04-06',-59.90,'Compra no débito - NETFLIX'],['2026-04-06',-79.88,'Compra no débito - BOI GARROTE'],
+    ['2026-04-06',-10.60,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-06',-8.00,'Compra no débito - JpSapataria'],
+    ['2026-04-06',-34.90,'Compra no débito - RESTAURANTE GARDENS'],['2026-04-06',-20.00,'Pix - GUILHERME JARZINSKI'],
+    ['2026-04-06',-48.54,'Compra no débito - MINUTO PA 6170'],['2026-04-07',-19.76,'Compra no débito - EMPORIO DO GAUCHO'],
+    ['2026-04-07',-50.00,'Compra no débito - PRODATA'],['2026-04-07',-35.00,'Compra no débito - RosaInesFerreira'],
+    ['2026-04-08',-6.03,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-08',-63.80,'Compra no débito - PANACEIA LTDA'],
+    ['2026-04-09',-19.51,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-09',-15.00,'Aplicação RDB'],
+    ['2026-04-10',-80.18,'Compra no débito - MINUTO PA 6170'],['2026-04-11',500.00,'Depósito de empréstimo'],
+    ['2026-04-11',-140.22,'Pix - ON DO REGISTRO CIVIL DO BRASIL'],['2026-04-12',-444.57,'Compra no débito - SHOPPING FRUTAS GUANAB'],
+    ['2026-04-12',-71.30,'Compra no débito - MINUTO PA 6170'],['2026-04-12',-9.00,'Compra no débito - ADMINISTRATIVO'],
+    ['2026-04-14',-6.58,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-14',-42.00,'Compra no débito - BANCA ROSA INES'],
+    ['2026-04-14',14790.06,'Transferência Recebida - HERMES CAPITAL'],['2026-04-14',195.50,'Pix Recebido - GUSTAVO CARVALHO'],
+    ['2026-04-15',-10.77,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-15',-100.00,'Pix - JOAO JOSE JARZINSKI'],
+    ['2026-04-15',-140.48,'Compra no débito - MINUTO PA 6170'],['2026-04-15',-300.00,'Pix - PAULA DE SOUSA E CASTRO'],
+    ['2026-04-15',-143.10,'Resgate de empréstimo'],['2026-04-15',-500.00,'Pix - MONALISA MELANIA NEFERTI'],
+    ['2026-04-16',-9.87,'Compra no débito - EMPORIO DO GAUCHO'],['2026-04-16',-2086.00,'Pix - Alexandre Ricosti (CEF)'],
+    ['2026-04-16',-237.74,'Pix - Casar.Com Site de Casamento'],['2026-04-16',-1232.55,'Pix - Alexandre Ricosti (Nu)'],
+    ['2026-04-16',-1000.00,'Pix - Mirtes de Oliveira'],['2026-04-16',-621.60,'Pix - Mirtes de Oliveira'],
+    ['2026-04-16',-4135.01,'Pagamento de fatura'],['2026-04-16',-94.90,'Pix - V A Sardinha Embalagens'],
+    ['2026-04-17',-355.55,'Pix - S S INTERMEDIACOES'],['2026-04-18',-3585.00,'Aplicação RDB'],['2026-04-19',1.00,'Resgate RDB'],
+    ['2026-04-23',-100.00,'Compra no débito - PRODATA'],
+  ].map(([d,v,t])=>({data:d,valor:v,titulo:t,parcela:null,origem:'db',venc:null,cat:categorize(t)})),
+];
+
+// ── Meta por mês ─────────────────────────────────────────────────────────────
+// ── REGISTRO DE ARQUIVOS IMPORTADOS ─────────────────────────────────────────
+// Chave de identificação: tipo + período (ex: "ct_2026-04_2026-04-23")
+// Regra: período mais recente sempre substitui o anterior
+// tipo: 'ct' = conta corrente | 'cc' = cartão de crédito
+const REGISTRO_ARQUIVOS = [
+  // CONTA CORRENTE
+  {
+    tipo: 'ct',
+    nome: 'NU_599626020_01MAR2026_31MAR2026',
+    periodo_ini: '2026-03-01',
+    periodo_fim: '2026-03-31',
+    mes: 'mar',
+    txs: 28,
+    saldo_ini: 309.73,
+    saldo_fim: 772.28,
+    auditado: true,   // saldo confirmado pelo PDF
+  },
+  {
+    tipo: 'ct',
+    nome: 'NU_599626020_01ABR2026_23ABR2026',
+    periodo_ini: '2026-04-01',
+    periodo_fim: '2026-04-23',
+    mes: 'abr',
+    txs: 64,
+    saldo_ini: 772.28,
+    saldo_fim: 401.04,
+    auditado: true,
+    obs: 'Substituiu versão anterior (até 20/04)',
+  },
+  // CARTÃO DE CRÉDITO
+  {
+    tipo: 'cc',
+    nome: 'Nubank_2026-03-21',
+    periodo_ini: '2026-02-14',
+    periodo_fim: '2026-03-13',
+    mes: 'mar',
+    txs: 106,
+    fatura: 6881.53,
+    venc: '21/03/2026',
+    auditado: true,
+  },
+  {
+    tipo: 'cc',
+    nome: 'Nubank_2026-04-21',
+    periodo_ini: '2026-03-14',
+    periodo_fim: '2026-04-10',
+    mes: 'abr',
+    txs: 56,
+    fatura: 4135.01,
+    venc: '21/04/2026',
+    auditado: true,
+  },
+  {
+    tipo: 'cc',
+    nome: 'Nubank_2026-05-21',
+    periodo_ini: '2026-04-14',
+    periodo_fim: '2026-04-24',
+    mes: 'mai',
+    txs: 61,
+    fatura: 5120.26,
+    venc: '21/05/2026',
+    auditado: false,
+    obs: 'Fatura em aberto — fecha 14/05/2026',
+  },
+];
+
+// Verifica duplicidade por tipo + sobreposição de período
+// Retorna null se não há conflito, ou o arquivo conflitante
+function checarDuplicidade(tipo, periodoIni, periodoFim) {
+  const ini = new Date(periodoIni);
+  const fim = new Date(periodoFim);
+  return REGISTRO_ARQUIVOS.find(a => {
+    if(a.tipo !== tipo) return false;
+    const aIni = new Date(a.periodo_ini);
+    const aFim = new Date(a.periodo_fim);
+    // Sobreposição: não (fim < aIni ou ini > aFim)
+    return !(fim < aIni || ini > aFim);
+  }) || null;
+}
+
+function renderArquivos() {
+  const grid = document.getElementById('arquivoGrid');
+  if(!grid) return;
+
+  // Detectar períodos sobrepostos entre arquivos do mesmo tipo
+  const substituidos = new Set();
+  REGISTRO_ARQUIVOS.forEach((a, i) => {
+    REGISTRO_ARQUIVOS.forEach((b, j) => {
+      if(i >= j || a.tipo !== b.tipo) return;
+      const aIni=new Date(a.periodo_ini), aFim=new Date(a.periodo_fim);
+      const bIni=new Date(b.periodo_ini), bFim=new Date(b.periodo_fim);
+      if(!(aFim < bIni || aIni > bFim)) {
+        // O mais antigo (menor fim) foi substituído
+        if(aFim <= bFim) substituidos.add(i);
+        else substituidos.add(j);
+      }
+    });
+  });
+
+  grid.innerHTML = REGISTRO_ARQUIVOS.map((a, i) => {
+    const isCT = a.tipo === 'ct';
+    const isSubst = substituidos.has(i);
+    const fmtD = s => s ? new Date(s).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+
+    let statusHtml = '';
+    if(isSubst) {
+      statusHtml = '<span class="arquivo-status status-sub">🔄 Substituído</span>';
+    } else if(a.auditado) {
+      statusHtml = '<span class="arquivo-status status-ok">✅ Auditado pelo PDF</span>';
+    } else {
+      statusHtml = '<span class="arquivo-status status-warn">⏳ PDF pendente</span>';
+    }
+
+    const detalhe = isCT
+      ? `Saldo: ${fmt(a.saldo_ini)} → <strong style="color:${a.saldo_fim>=0?'var(--green)':'var(--red)'};">${fmt(a.saldo_fim)}</strong>`
+      : `Fatura: <strong>${fmt(a.fatura)}</strong> · Venc: ${a.venc}`;
+
+    const obs = a.obs ? `<div style="font-size:9px;color:var(--amber);margin-top:2px">⚠ ${a.obs}</div>` : '';
+
+    return `<div class="arquivo-card tipo-${a.tipo}">
+      <span class="arquivo-badge">${isCT ? '🟢' : '🔵'}</span>
+      <div class="arquivo-nome" title="${a.nome}">${a.nome}</div>
+      <div class="arquivo-periodo">${fmtD(a.periodo_ini)} → ${fmtD(a.periodo_fim)} · ${a.txs} txs</div>
+      <div style="font-size:10px;color:var(--muted)">${detalhe}</div>
+      ${statusHtml}
+      ${obs}
+    </div>`;
+  }).join('');
+}
+
+// ── Saldos auditados (confirmados pelos PDFs) ───────────────────────────────────────
+// ── SALDOS AUDITADOS POR PDF ──────────────────────────────────────────────────
+// Regra: inicio[mês] = fim[mês anterior] (confirmado pelo PDF)
+// Âncora: saldo inicial do mês mais antigo disponível = R$ 309,73 (mar/2026)
+// Ao adicionar novos meses: acrescente uma entrada com { inicio, fim }
+// onde inicio = fim do mês anterior e fim = saldo final confirmado pelo PDF
+const SALDOS_PDF = {
+  // 2026
+  mar: { inicio: 309.73, fim: 772.28 },  // PDF: extrato 01/03 a 31/03/2026
+  abr: { inicio: 772.28, fim: 401.04 },  // PDF: extrato 01/04 a 23/04/2026
+  mai: { inicio: 401.04, fim: null   },  // PDF: ainda não disponível (fecha 14/05)
+  // Para adicionar jun/2026: jun: { inicio: <fim de mai>, fim: <saldo final PDF> }
+};
+
+// Retorna o saldo inicial do mês, sempre derivado do fim do mês anterior
+function getSaldoInicial(mes) {
+  return SALDOS_PDF[mes] ? SALDOS_PDF[mes].inicio : null;
+}
+
+// Retorna o saldo final confirmado pelo PDF (null se ainda não disponível)
+function getSaldoFimPDF(mes) {
+  return SALDOS_PDF[mes] ? SALDOS_PDF[mes].fim : null;
+}
+
+const META={
+  mar:{saldo_inicial:309.73,saldo_final:772.28,entradas:7342.27,saidas:6879.72,rdb_aplicado:3100,rdb_resgatado:0,
+    fatura_valor:6881.53,fatura_compras:6729.86,fatura_iof:13.00,fatura_outros:138.66,
+    // fatura_pagamento: valor pago em MAR referente à fatura de FEV (anterior ao período rastreado)
+    fatura_pagamento:{valor:6257.47,ref:'fev'},
+    fatura_venc:'21/03/2026',fatura_periodo:'14/FEV a 14/MAR',rdb_saldo:8283.52,limite_garantido:8283.52,limite_usado:8217.83,
+    categorias:[{nome:'Alimentação/Delivery',valor:1853.65,cor:'#ef4444'},{nome:'Mercado/Compras',valor:1180.13,cor:'#f97316'},
+      {nome:'Compras Online',valor:1029.13,cor:'#3b82f6'},{nome:'Outros',valor:998.17,cor:'#6b7280'},
+      {nome:'Assinaturas',valor:533.14,cor:'#8b5cf6'},{nome:'Transporte',valor:482.32,cor:'#f59e0b'},
+      {nome:'Contas Fixas',valor:329.80,cor:'#06b6d4'},{nome:'Parcelas',valor:189.03,cor:'#a78bfa'},
+      {nome:'Saúde',valor:180.63,cor:'#22c55e'},{nome:'Serviços Pessoais',valor:120.50,cor:'#ec4899'}]},
+  abr:{saldo_inicial:772.28,saldo_final:401.04,entradas:16486.56,saidas:16857.80,rdb_aplicado:3760,rdb_resgatado:1,
+    fatura_valor:4135.01,fatura_compras:3974.76,fatura_iof:3.95,fatura_outros:156.30,
+    // fatura_pagamento: valor pago em ABR referente à fatura de MAR (META.mar.fatura_valor = 6881.53)
+    fatura_pagamento:{valor:6881.53,ref:'mar'},
+    fatura_venc:'21/04/2026',fatura_periodo:'14/MAR a 14/ABR',rdb_saldo:3722.05,limite_garantido:3722.05,limite_usado:3706.95,
+    categorias:[{nome:'Mercado/Compras',valor:1128.72,cor:'#f97316'},{nome:'Compras Online',valor:1029.13,cor:'#3b82f6'},
+      {nome:'Outros',valor:493.96,cor:'#6b7280'},{nome:'Alimentação/Delivery',valor:476.18,cor:'#ef4444'},
+      {nome:'Transporte',valor:288.56,cor:'#f59e0b'},{nome:'Contas Fixas',valor:209.90,cor:'#06b6d4'},
+      {nome:'Assinaturas',valor:181.55,cor:'#8b5cf6'},{nome:'Parcelas',valor:176.67,cor:'#a78bfa'},
+      {nome:'Saúde',valor:120.40,cor:'#22c55e'},{nome:'Serviços Pessoais',valor:29.93,cor:'#ec4899'}]},
+  // ATENÇÃO: saldo_inicial derivado de SALDOS_PDF['abr'].fim (401.04).
+  // Valor anterior (501.04) era erro de digitação — divergência de R$ 100,00 sem origem identificada.
+  // Investigar se há entrada não registrada antes de alterar.
+  mai:{saldo_inicial:401.04,saldo_final:null,entradas:0,saidas:0,rdb_aplicado:0,rdb_resgatado:0,
+    fatura_valor:5120.26,fatura_compras:5095.52,fatura_iof:24.74,fatura_outros:0,
+    // fatura_pagamento: valor pago em MAI referente à fatura de ABR (META.abr.fatura_valor = 4135.01)
+    fatura_pagamento:{valor:4135.01,ref:'abr'},
+    fatura_venc:'21/05/2026',fatura_periodo:'14/ABR a 24/ABR (em aberto · fecha 14/05)',
+    rdb_saldo:7306.05,limite_garantido:7306.05,limite_usado:null,
+    // ── Limite estimado: calculado dinamicamente em renderPainelAtual()
+    // Fórmula: limite_total = rdb_saldo + 3200 (base fixo Nubank)
+    //          limite_disp  = limite_total - fatura_valor (fatura em aberto)
+    // Os campos abaixo são apenas fallback; valores reais vêm do cálculo.
+    limite_total_est:10506.05,limite_disp_est:null,
+    _emAberto:true,
+    dias_realizados:11, dias_restantes:20, fechamento:'14/05/2026',
+    parcelas_ativas:[
+      {nome:'Aramis Analia Franco',parc:'1/6',valor:366.65,restantes:5,total_futuro:1833.25},
+      {nome:'Santo Sofa',parc:'9/12',valor:306.83,restantes:3,total_futuro:920.49},
+      {nome:'Centauro Ce117',parc:'1/7',valor:82.18,restantes:6,total_futuro:493.08},
+      {nome:'Dr. Consulta',parc:'6/10',valor:57.40,restantes:4,total_futuro:229.60},
+      {nome:'Inditex Brasil',parc:'1/3',valor:93.18,restantes:2,total_futuro:186.36},
+      {nome:'Fastsho*Cd33d2x',parc:'9/10',valor:94.85,restantes:1,total_futuro:94.85},
+      {nome:'00033 Sh Analia Franc',parc:'1/2',valor:69.90,restantes:1,total_futuro:69.90},
+      {nome:'Htm*Leandro Munhoz',parc:'11/12',valor:20.37,restantes:1,total_futuro:20.37},
+    ],
+    compromissos_por_fatura:[
+      {mes:'Jun/2026',valor:1091.36},
+      {mes:'Jul/2026',valor:906.24},
+      {mes:'Ago/2026',valor:813.06},
+      {mes:'Set/2026',valor:506.23},
+      {mes:'Out/2026',valor:448.83},
+      {mes:'Nov/2026',valor:82.18},
+    ],
+    total_compromissos_futuros:3847.90,
+    parcelas_encerradas:['Amazonmktplc*Lojaelect','Amazon Marketplace','Www-Casasbahia-Com-Br','Amazonmktplc*Sandrinia','Cartao Drconsulta','Amazonmktplc*Dkkcalcad','Carrefour Lj 31 Pdv'],
+    liberado_apos_fatura:1027.18,
+    categorias:[{nome:'Compras Online',valor:1122.31,cor:'#3b82f6'},{nome:'Alimentação/Delivery',valor:910.77,cor:'#ef4444'},
+      {nome:'Parcelas Fixas',valor:845.93,cor:'#a78bfa'},{nome:'Assinaturas',valor:741.16,cor:'#8b5cf6'},
+      {nome:'Mercado/Compras',valor:466.73,cor:'#f97316'},{nome:'Transporte',valor:307.73,cor:'#f59e0b'},
+      {nome:'Serviços Pessoais',valor:306.50,cor:'#ec4899'},{nome:'Contas Fixas',valor:209.90,cor:'#06b6d4'},
+      {nome:'Saúde',valor:155.18,cor:'#22c55e'},{nome:'IOF',valor:24.74,cor:'#6b7280'}]}
+};
+
+// ── Estado ───────────────────────────────────────────────────────────────────
+let mesSel='mai',viewSel='cartao',origemF='todos',tipoF='todos',chartInst=null;
+
+// ── Semanas ──────────────────────────────────────────────────────────────────
+function getSemanas(mes){
+  const ano=2026, m=mes==='mar'?2:mes==='abr'?3:4;
+  const semanas=[];
+  const primeiroDia = new Date(ano, m, 1);
+  const ultimoDia   = new Date(ano, m+1, 0);
+
+  // Recuar ate a segunda-feira da semana do primeiro dia do mes
+  let inicioSem = new Date(primeiroDia);
+  const dSem = inicioSem.getDay(); // 0=dom,1=seg,...,6=sab
+  inicioSem.setDate(inicioSem.getDate() - (dSem === 0 ? 6 : dSem - 1));
+
+  let ws = 1;
+  while(inicioSem <= ultimoDia){
+    const fimSem = new Date(inicioSem);
+    fimSem.setDate(fimSem.getDate() + 6); // domingo
+    const ini = new Date(Math.max(inicioSem.getTime(), primeiroDia.getTime()));
+    const fim = new Date(Math.min(fimSem.getTime(),   ultimoDia.getTime()));
+    semanas.push({label:`Sem ${ws}: ${fmtDate(ini)} – ${fmtDate(fim)}`,inicio:ini,fim:fim});
+    inicioSem.setDate(inicioSem.getDate() + 7);
+    ws++;
+  }
+  return semanas;
+}
+
+function populateSemanas(){
+  const sel=document.getElementById('selSemana');
+  const semanas=getSemanas(mesSel);
+  sel.innerHTML=semanas.map((s,i)=>`<option value="${i}">${s.label}</option>`).join('');
+  const hoje=new Date(); // sempre usa a data real de hoje
+  let best=semanas.length-1; // padrão: última semana do mês
+  semanas.forEach((s,i)=>{if(hoje>=s.inicio&&hoje<=s.fim)best=i;});
+  sel.value=best;
+}
+
+// ── Render Semana ────────────────────────────────────────────────────────────
+function renderSemana(){
+  const semanas = getSemanas(mesSel);
+  const {inicio, fim} = semanas[+document.getElementById('selSemana').value];
+  const busca = document.getElementById('inputBusca').value.toLowerCase();
+
+  // ── Saldo inicial da semana ─────────────────────────────────────────────────
+  // Parte do saldo inicial do mês (PDF) e acumula todas as txs de conta corrente
+  // anteriores ao início da semana selecionada
+  // Âncora única: saldo inicial de março (PDF confirmado)
+  const ANCORA_SALDO = 309.73;
+  const ANCORA_DATA  = new Date(2026,2,1); // 01/03/2026 — CORREÇÃO: mês JS é 0-indexado (1=fev, 2=mar)
+
+  // Saldo no início da semana = âncora + todas txs de conta corrente antes da semana
+  const saldoInicioSemana = ANCORA_SALDO + ALL_TX.filter(t => {
+    if(t.origem !== 'db') return false;
+    const d = parseDate(t.data);
+    return d && d >= ANCORA_DATA && d < inicio;
+  }).reduce((s,t) => s + t.valor, 0);
+
+  // Saldo no fim da semana
+  const saldoFimSemana = saldoInicioSemana + ALL_TX.filter(t => {
+    if(t.origem !== 'db') return false;
+    const d = parseDate(t.data);
+    return d && d >= inicio && d <= fim;
+  }).reduce((s,t) => s + t.valor, 0);
+
+  // ── Auditoria: verificar saldo calculado vs PDF no fim do mês ──────────────
+  const mesInicio = mesSel==='mar'?new Date(2026,1,1):mesSel==='abr'?new Date(2026,2,1):new Date(2026,3,1);
+  const mesFim    = mesSel==='mar'?new Date(2026,2,31):mesSel==='abr'?new Date(2026,3,23):new Date(2026,3,30);
+  const saldoFimPDF = getSaldoFimPDF(mesSel);
+  let alertaAuditoria = '';
+  if(saldoFimPDF !== null) {
+    const saldoCalculado = ANCORA_SALDO + ALL_TX.filter(t => {
+      if(t.origem !== 'db') return false;
+      const d = parseDate(t.data);
+      return d && d >= ANCORA_DATA && d <= mesFim;
+    }).reduce((s,t) => s + t.valor, 0);
+    const diff = Math.abs(saldoCalculado - saldoFimPDF);
+    if(diff > 0.02) {
+      alertaAuditoria = `<div style="margin:8px 16px;padding:8px 14px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;font-size:11px;color:var(--red)">
+        ⚠ Divergência de auditoria: saldo calculado <strong>${fmt(saldoCalculado)}</strong> ≠ PDF <strong>${fmt(saldoFimPDF)}</strong> (diff: ${fmt(diff)})
+      </div>`;
+    } else {
+      alertaAuditoria = `<div style="margin:8px 16px;padding:6px 14px;background:rgba(34,197,94,.06);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:11px;color:var(--green)">
+        ✅ Auditoria OK — saldo calculado <strong>${fmt(saldoCalculado)}</strong> = PDF <strong>${fmt(saldoFimPDF)}</strong>
+      </div>`;
+    }
+  } else {
+    alertaAuditoria = `<div style="margin:8px 16px;padding:6px 14px;background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);border-radius:8px;font-size:11px;color:var(--amber)">
+      ⏳ Auditoria pendente — PDF de ${mesSel==='mai'?'maio':'este mês'} ainda não disponível (fecha 14/05)
+    </div>`;
+  }
+
+  // ── Filtrar transações da semana ────────────────────────────────────────────
+  let txs = ALL_TX.filter(t => {
+    const d = parseDate(t.data);
+    if(!d || d < inicio || d > fim) return false;
+    if(origemF !== 'todos' && t.origem !== origemF) return false;
+    if(tipoF === 'entrada' && t.valor <= 0) return false;
+    if(tipoF === 'saida'   && t.valor >= 0) return false;
+    if(busca && !t.titulo.toLowerCase().includes(busca) && !t.cat.toLowerCase().includes(busca)) return false;
+    return true;
+  });
+
+  const totE = txs.filter(t=>t.valor>0).reduce((s,t)=>s+t.valor,0);
+  const totS = txs.filter(t=>t.valor<0).reduce((s,t)=>s+Math.abs(t.valor),0);
+  const saldo = totE - totS;
+
+  document.getElementById('weekSummary').innerHTML = `
+    <div class="wsi"><div class="wsi-lbl">Transações</div><div class="wsi-val" style="color:var(--text)">${txs.length}</div></div>
+    <div class="wsi"><div class="wsi-lbl">Entradas</div><div class="wsi-val" style="color:var(--green)">+ ${fmt(totE)}</div></div>
+    <div class="wsi"><div class="wsi-lbl">Saídas</div><div class="wsi-val" style="color:var(--red)">− ${fmt(totS)}</div></div>
+    <div class="wsi"><div class="wsi-lbl">Saldo do Período</div><div class="wsi-val" style="color:${saldo>=0?'var(--green)':'var(--red)'}">${saldo>=0?'+':'−'} ${fmt(Math.abs(saldo))}</div></div>
+    <div class="wsi"><div class="wsi-lbl">Saldo Início Semana</div><div class="wsi-val" style="color:var(--nu-light)">${fmt(saldoInicioSemana)}</div></div>
+    <div class="wsi"><div class="wsi-lbl">Saldo Fim Semana</div><div class="wsi-val" style="color:${saldoFimSemana>=0?'var(--green)':'var(--red)'}">${fmt(saldoFimSemana)}</div></div>`;
+
+  // ── Calcular saldo acumulado dia a dia (só conta corrente) ──────────────────
+  // 1. Pegar todos os dias com movimentação de débito no mês inteiro (não só a semana)
+  //    para poder resolver dias sem movimentação → usa o saldo do último dia anterior
+  // ANCORA_DATA já definida acima como new Date(2026,2,1) = 01/03/2026
+  const todosOsDiasDB = [...new Set(
+    ALL_TX.filter(t => t.origem==='db' && parseDate(t.data) && parseDate(t.data) >= ANCORA_DATA)
+          .map(t => t.data)
+  )].sort();
+
+  // 2. Construir o mapa de saldo acumulado para TODOS os dias com movimentação
+  const saldoAcumMap = {}; // data_iso → saldo ao final do dia
+  let acumGlobal = ANCORA_SALDO;
+  todosOsDiasDB.forEach(dia => {
+    const mov = ALL_TX.filter(t=>t.data===dia && t.origem==='db').reduce((s,t)=>s+t.valor,0);
+    acumGlobal += mov;
+    saldoAcumMap[dia] = acumGlobal;
+  });
+
+  // 3. Para um dia qualquer, retorna o saldo do último dia com movimentação até ele
+  function getSaldoAteData(dataIso) {
+    // Buscar o último dia <= dataIso que tenha saldo calculado
+    const diasAnteriores = todosOsDiasDB.filter(d => d <= dataIso);
+    if(diasAnteriores.length === 0) return saldoInicioSemana;
+    return saldoAcumMap[diasAnteriores[diasAnteriores.length - 1]];
+  }
+
+  // saldoPorDia calculado abaixo após byDay
+
+  // ── Montar tabela ───────────────────────────────────────────────────────────
+  const byDay = {};
+  txs.sort((a,b)=>parseDate(b.data)-parseDate(a.data)).forEach(t=>{
+    if(!byDay[t.data]) byDay[t.data]=[];
+    byDay[t.data].push(t);
+  });
+
+  // Gerar TODOS os dias da semana (seg→dom), mesmo sem transações
+  const toIso = d => d.toISOString().slice(0,10);
+  const todosDiasSemana = [];
+  for(let d = new Date(inicio); d <= fim; d.setDate(d.getDate()+1)){
+    todosDiasSemana.push(toIso(new Date(d)));
+  }
+
+  // Calcular saldo para cada dia (com ou sem movimentação)
+  const saldoPorDia = {};
+  todosDiasSemana.forEach(dia => {
+    const temMov = todosOsDiasDB.includes(dia);
+    const saldo  = getSaldoAteData(dia);
+    saldoPorDia[dia] = { saldoFim: saldo, semMov: !temMov };
+  });
+
+  let html = `<tr>
+    <th style="width:28px"></th>
+    <th>Data</th>
+    <th>Descrição</th>
+    <th>Categoria</th>
+    <th>Parcela</th>
+    <th>Origem</th>
+    <th style="text-align:right">Valor</th>
+    <th style="text-align:right;color:var(--nu-light);font-size:9px">SALDO C/C</th>
+  </tr>`;
+
+  if(!todosDiasSemana.length){
+    html += `<tr class="empty-row"><td colspan="8">Nenhuma transação encontrada.</td></tr>`;
+  } else {
+    // Iterar todos os dias da semana em ordem decrescente (mais recente primeiro)
+    [...todosDiasSemana].reverse().forEach((dia, gi) => {
+      const ds = byDay[dia] || []; // transações do dia (pode ser vazio)
+      const groupId = 'wg'+gi;
+      const d = parseDate(dia);
+      const dl = fmtDate(d,{weekday:'short',day:'2-digit',month:'2-digit'}).toUpperCase();
+      const tot = ds.reduce((s,t)=>s+t.valor,0);
+      const info = saldoPorDia[dia];
+
+      // Linha do dia com saldo
+      html += `<tr class="day-div" ${ds.length>0?`onclick="toggleWeekGroup('${groupId}',this)" style="cursor:pointer;user-select:none"`:'style="cursor:default"'}>
+        <td style="text-align:center;font-size:11px;color:var(--nu-light)" id="tri_${groupId}" data-open="1">${ds.length>0?'&#9660;':''}</td>
+        <td colspan="3" style="font-family:Arial,sans-serif;font-size:11px;font-weight:700;color:var(--nu-light)">${dl} <span style="font-size:10px;color:var(--muted);margin-left:6px;font-weight:400">${ds.length === 0 ? '<em style=\'color:var(--muted)\'>sem lançamentos</em>' : ds.length+' lançamento'+(ds.length>1?'s':'')}</span></td>
+        <td></td>
+        <td></td>
+        <td style="text-align:right;font-weight:700;color:${tot<0?'var(--red)':'var(--green)'}">
+          ${tot>=0?'+':'−'} ${fmt(Math.abs(tot))}
+        </td>
+        <td style="text-align:right">
+          ${info
+            ? '<span style="font-size:12px;font-weight:700;color:'+(info.saldoFim>=0?'var(--nu-light)':'var(--red)')+'">'+fmt(info.saldoFim)+(info.semMov?'<span title="Sem movimentação neste dia — saldo do último dia anterior" style="font-size:9px;color:var(--muted);margin-left:3px">*</span>':'')+'</span>'
+            : '<span style="color:var(--muted);font-size:12px">—</span>'}
+        </td></tr>`;
+
+      // Linhas filhas
+      ds.forEach(t => {
+        html += `<tr class="week-child-${groupId}">
+          <td></td>
+          <td class="tx-date">${fmtDate(parseDate(t.data))}</td>
+          <td class="tx-title">${t.titulo}</td>
+          <td><span class="tx-cat">${t.cat}</span></td>
+          <td>${t.parcela?'<span style="font-size:11px;font-weight:700;color:var(--nu-light);background:rgba(139,92,246,.1);padding:2px 8px;border-radius:20px">'+t.parcela+'</span>':'<span style="color:var(--muted)">—</span>'}</td>
+          <td><span class="tx-orig ${t.origem==='cc'?'occ':'odb'}">${t.origem==='cc'?'Crédito':'Débito'}</span></td>
+          <td class="tx-val ${t.valor>=0?'pos':'neg'}">${t.valor>=0?'+':'−'} ${fmt(t.valor)}</td>
+          <td></td>
+        </tr>`;
+      });
+    });
+  }
+
+  document.getElementById('weekTable').innerHTML = html;
+
+  // Inserir alerta de auditoria após o sumário
+  const auditEl = document.getElementById('weekAudit');
+  if(auditEl) auditEl.innerHTML = alertaAuditoria;
+}
+// ── Total por dia (cartão + débito) ─────────────────────────────────────────
+function getTotalPorDia(){
+  const m=mesSel==='mar'?new Date(2026,1,1):mesSel==='abr'?new Date(2026,2,1):new Date(2026,3,14);
+  const mf=mesSel==='mar'?new Date(2026,2,31):mesSel==='abr'?new Date(2026,3,23):new Date(2026,3,24);
+  const map={};
+  ALL_TX.forEach(t=>{
+    const d=parseDate(t.data);
+    if(!d||d<m||d>mf||t.valor>=0)return;
+    map[t.data]=(map[t.data]||0)+Math.abs(t.valor);
+  });
+  return map;
+}
+
+// ── Render Lançamentos ───────────────────────────────────────────────────────
+function renderTx(){
+  const isCC=viewSel==='cartao';
+  const isCons=viewSel==='consolidado';
+  const m=mesSel==='mar'?new Date(2026,1,1):mesSel==='abr'?new Date(2026,2,1):new Date(2026,3,14);
+  const mf=mesSel==='mar'?new Date(2026,2,31):mesSel==='abr'?new Date(2026,3,23):new Date(2026,3,24);
+  const vf=mesSel==='mar'?'21/03/2026':mesSel==='abr'?'21/04/2026':'21/05/2026';
+  const totDia=getTotalPorDia();
+
+  // Filtrar transações conforme a aba ativa
+  let txs=ALL_TX.filter(t=>{
+    const d=parseDate(t.data);
+    if(!d)return false;
+    if(isCC)    return t.origem==='cc'&&t.venc===vf;
+    if(isCons)  return (t.origem==='cc'&&t.venc===vf)||(t.origem==='db'&&d>=m&&d<=mf);
+    return t.origem==='db'&&d>=m&&d<=mf;
+  }).sort((a,b)=>parseDate(b.data)-parseDate(a.data));
+
+  // Cabeçalho da tabela
+  const colsCC   = 8; // triângulo + data + desc + cat + parcela + venc + valor + tot
+  const colsDB   = 6; // triângulo + data + desc + cat + valor + tot
+  const colsCons = 8; // triângulo + data + desc + cat + parcela + origem + valor + tot
+  let cols = isCC?colsCC:isCons?colsCons:colsDB;
+
+  let html = isCC
+    ? `<tr><th style="width:28px"></th><th>Data</th><th>Descrição</th><th>Categoria</th><th>Parcela</th><th>Venc.</th><th style="text-align:right">Valor (CC)</th><th style="text-align:right">Total do Dia ¹</th></tr>`
+    : isCons
+    ? `<tr><th style="width:28px"></th><th>Data</th><th>Descrição</th><th>Categoria</th><th>Parcela</th><th>Origem</th><th style="text-align:right">Valor</th><th style="text-align:right">Total do Dia ¹</th></tr>`
+    : `<tr><th style="width:28px"></th><th>Data</th><th>Descrição</th><th>Categoria</th><th style="text-align:right">Valor (Déb.)</th><th style="text-align:right">Total do Dia ¹</th></tr>`;
+
+  // Agrupar por dia
+  const byDay={};
+  txs.forEach(t=>{if(!byDay[t.data])byDay[t.data]=[];byDay[t.data].push(t);});
+
+  if(!Object.keys(byDay).length){
+    html+=`<tr class="empty-row"><td colspan="${cols}">Nenhuma transação encontrada.</td></tr>`;
+  } else {
+    Object.entries(byDay).sort((a,b)=>parseDate(b[0])-parseDate(a[0])).forEach(([dia,ds],gi)=>{
+      const groupId=`txg_${gi}`;
+      // Total do dia (CC + débito combinados para todas as abas)
+      const totD=totDia[dia]||0;
+      const totDiaTxs=ds.reduce((s,t)=>s+(t.valor<0?Math.abs(t.valor):0),0);
+      const d=parseDate(dia);
+      const dl=fmtDate(d,{weekday:'short',day:'2-digit',month:'2-digit'}).toUpperCase();
+
+      // Linha de cabeçalho do dia (clicável)
+      html+=`<tr class="day-div" onclick="toggleTxGroup('${groupId}',this)" style="cursor:pointer;user-select:none">
+        <td style="text-align:center;font-size:11px;color:var(--nu-light)" id="txTri_${groupId}" data-open="1">&#9660;</td>
+        <td colspan="${cols-3}">${dl} <span style="font-size:10px;color:var(--muted);margin-left:6px">${ds.length} lançamento${ds.length>1?'s':''}</span></td>
+        <td style="text-align:right;font-size:11px;color:var(--muted)">saídas</td>
+        <td style="text-align:right;font-weight:700;color:var(--red)">− ${fmt(totDiaTxs)}</td>
+      </tr>`;
+
+      // Linhas filhas
+      ds.forEach(t=>{
+        const parcelaCell = t.parcela
+          ? '<td><span style="font-size:11px;font-weight:700;color:var(--nu-light);background:rgba(139,92,246,.1);padding:2px 8px;border-radius:20px;white-space:nowrap">'+t.parcela+'</span></td>'
+          : '<td style="text-align:center;color:var(--muted);font-size:13px">—</td>';
+
+        if(isCC){
+          html+=`<tr class="tx-child-${groupId}">
+            <td></td>
+            <td class="tx-date">${fmtDate(parseDate(t.data))}</td>
+            <td class="tx-title">${t.titulo}</td>
+            <td><span class="tx-cat">${t.cat}</span></td>
+            ${parcelaCell}
+            <td><span class="tx-venc">${t.venc}</span></td>
+            <td class="tx-val neg">− ${fmt(Math.abs(t.valor))}</td>
+            <td></td>
+          </tr>`;
+        } else if(isCons){
+          const origCell=`<span class="tx-orig ${t.origem==='cc'?'occ':'odb'}">${t.origem==='cc'?'Crédito':'Débito'}</span>`;
+          html+=`<tr class="tx-child-${groupId}">
+            <td></td>
+            <td class="tx-date">${fmtDate(parseDate(t.data))}</td>
+            <td class="tx-title">${t.titulo}</td>
+            <td><span class="tx-cat">${t.cat}</span></td>
+            ${t.origem==='cc'?parcelaCell:'<td style="text-align:center;color:var(--muted);font-size:13px">—</td>'}
+            <td>${origCell}</td>
+            <td class="tx-val ${t.valor>=0?'pos':'neg'}">${t.valor>=0?'+':'−'} ${fmt(Math.abs(t.valor))}</td>
+            <td></td>
+          </tr>`;
+        } else {
+          html+=`<tr class="tx-child-${groupId}">
+            <td></td>
+            <td class="tx-date">${fmtDate(parseDate(t.data))}</td>
+            <td class="tx-title">${t.titulo}</td>
+            <td><span class="tx-cat">${t.cat}</span></td>
+            <td class="tx-val ${t.valor>=0?'pos':'neg'}">${t.valor>=0?'+':'−'} ${fmt(t.valor)}</td>
+            <td></td>
+          </tr>`;
+        }
+      });
+
+      // Linha de resumo do dia (total combinado CC+Débito)
+      if(totD>0){
+        html+=`<tr class="tx-child-${groupId}" style="background:rgba(42,42,53,.3)">
+          <td></td>
+          <td colspan="${cols-3}" style="font-size:11px;color:var(--muted);padding-left:8px">Total combinado do dia (CC + Débito)</td>
+          <td></td>
+          <td class="tx-day-total">${fmt(totD)}</td>
+        </tr>`;
+      }
+    });
+  }
+
+  html+=`<tr><td colspan="${cols}" class="foot-note">¹ Total do Dia = soma de todos os gastos (cartão de crédito + débito) naquela data</td></tr>`;
+  document.getElementById('txTable').innerHTML=html;
+}
+
+
+// ── KPIs ─────────────────────────────────────────────────────────────────────
+function renderKPIs(){
+  const d=META[mesSel];
+  if(d._emAberto){
+    document.getElementById('kpis').innerHTML=`
+      <div class="card sortable-card"><div class="card-label">Fatura Atual</div><div class="card-value amber">${fmt(d.fatura_valor)}</div><div class="card-sub">⚠ Em aberto — fecha 14/05</div></div>
+      <div class="card sortable-card"><div class="card-label">Limite Disponível Est.</div><div class="card-value ${(d.limite_disp_est ?? (d.limite_total_est - d.fatura_valor - (d.total_compromissos_futuros||0)))<2000?'amber':'green'}">${fmt(d.limite_disp_est ?? (d.limite_total_est - d.fatura_valor - (d.total_compromissos_futuros||0)))}</div><div class="card-sub">Comprometido Jun+: ${fmt(d.total_compromissos_futuros)}</div></div>
+      <div class="card sortable-card"><div class="card-label">Saldo RDB Estimado</div><div class="card-value purple">${fmt(d.rdb_saldo)}</div><div class="card-sub">Após aplicação 18/04</div></div>
+      <div class="card sortable-card"><div class="card-label">Fatura Anterior Paga</div><div class="card-value green">${fmt(d.fatura_pagamento.valor)}</div><div class="card-sub">Ref. fatura ${(d.fatura_pagamento.ref||'').toUpperCase()} · Pago em 16/04/2026</div></div>`;
+    return;
+  }
+  const diff=d.saldo_final-d.saldo_inicial;
+  const gr=d.saidas-d.rdb_aplicado+d.rdb_resgatado;
+  document.getElementById('kpis').innerHTML=`
+    <div class="card sortable-card"><div class="card-label">Entradas no Mês</div><div class="card-value green">${fmt(d.entradas)}</div><div class="card-sub">Conta corrente</div></div>
+    <div class="card sortable-card"><div class="card-label">Saídas Totais</div><div class="card-value red">${fmt(d.saidas)}</div><div class="card-sub">Incl. RDB e fatura</div></div>
+    <div class="card sortable-card"><div class="card-label">Gastos Reais</div><div class="card-value amber">${fmt(gr)}</div><div class="card-sub">Sem RDB · Débito + Pix</div></div>
+    <div class="card sortable-card"><div class="card-label">Saldo Final</div><div class="card-value ${diff>=0?'green':'red'}">${fmt(d.saldo_final)}</div>
+      <div class="card-badge ${diff>=0?'badge-green':'badge-red'}">${diff>=0?'▲':'▼'} ${fmt(Math.abs(diff))} no período</div></div>`;
+}
+
+function renderFatura(){
+  const d=META[mesSel];
+  if(d._emAberto){
+    // Barra de progresso do período
+    const pctDias=Math.round((d.dias_realizados/(d.dias_realizados+d.dias_restantes))*100);
+    const parcelasRows=d.parcelas_ativas.map(p=>`
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid rgba(42,42,53,.4);font-size:11px">
+        <span style="color:var(--text);flex:1">${p.nome}</span>
+        <span style="color:var(--muted);margin:0 8px">${p.parc}</span>
+        <span style="font-size:10px;color:var(--muted);margin-right:8px">${p.restantes} restante${p.restantes>1?'s':''}</span>
+        <span style="color:var(--nu-light);font-weight:600">${fmt(p.valor)}/mês</span>
+        <span style="color:var(--amber);font-size:10px;margin-left:6px">= ${fmt(p.total_futuro)}</span>
+      </div>`).join('');
+    const compromissosRows=(d.compromissos_por_fatura||[]).map(c=>`
+      <div style="display:flex;justify-content:space-between;padding:4px 0;font-size:11px;border-bottom:1px solid rgba(42,42,53,.3)">
+        <span style="color:var(--muted)">Fatura ${c.mes}</span>
+        <span style="color:var(--red);font-weight:600">${fmt(c.valor)}</span>
+      </div>`).join('');
+    const encRows=d.parcelas_encerradas.map(n=>`
+      <div style="font-size:11px;color:var(--muted);padding:3px 0">✅ ${n}</div>`).join('');
+    document.getElementById('faturaCard').innerHTML=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div class="card-label" style="margin:0">Fatura em aberto · Fecha ${d.fechamento}</div>
+        <span style="font-size:10px;background:rgba(245,158,11,.15);color:var(--amber);padding:3px 10px;border-radius:20px;border:1px solid rgba(245,158,11,.3)">⏳ EM ABERTO</span>
+      </div>
+      <div style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-bottom:4px">
+          <span>Período: 14/ABR → 14/MAI</span><span>${d.dias_realizados} dias realizados · ${d.dias_restantes} restantes</span>
+        </div>
+        <div style="height:6px;background:var(--border);border-radius:6px;overflow:hidden">
+          <div style="width:${pctDias}%;height:100%;background:linear-gradient(90deg,var(--nu),var(--nu-light));border-radius:6px"></div>
+        </div>
+      </div>
+      <div class="fatura-row"><span style="color:var(--muted)">Realizado (14–23/ABR)</span><span style="color:var(--text);font-weight:600">${fmt(d.fatura_valor)}</span></div>
+      <div class="fatura-row"><span style="color:var(--green)">Projeção parcelas fixas restantes</span><span style="color:var(--green)">R$ 0,00</span></div>
+      <div class="fatura-row total"><span>Fatura mínima projetada</span><span style="color:var(--amber)">${fmt(d.fatura_valor)}+</span></div>
+      <div style="margin-top:14px">
+        <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Parcelas ativas nesta fatura</div>
+        ${parcelasRows}
+        <div style="margin-top:10px;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Encerradas após esta fatura 🎉</div>
+        ${encRows}
+        <div style="margin-top:8px;padding:8px;background:rgba(34,197,94,.08);border:1px solid rgba(34,197,94,.2);border-radius:8px;font-size:11px;color:var(--green)">
+          💰 Limite liberado após esta fatura: <strong>${fmt(d.liberado_apos_fatura)}</strong>
+        </div>
+        <div style="margin-top:12px">
+          <div style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Compromissos futuros por fatura</div>
+          ${compromissosRows}
+          <div style="display:flex;justify-content:space-between;padding:6px 0;font-size:12px;font-weight:700;border-top:1px solid var(--border);margin-top:4px">
+            <span style="color:var(--text)">Total comprometido Jun+</span>
+            <span style="color:var(--red)">${fmt(d.total_compromissos_futuros)}</span>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+  document.getElementById('faturaCard').innerHTML=`
+    <div class="card-label" style="margin-bottom:10px">Período: ${d.fatura_periodo} · Venc: ${d.fatura_venc}</div>
+    <div class="fatura-row"><span style="color:var(--muted)">Compras no período</span><span>${fmt(d.fatura_compras)}</span></div>
+    <div class="fatura-row"><span style="color:var(--muted)">IOF compras internacionais</span><span>${fmt(d.fatura_iof)}</span></div>
+    <div class="fatura-row"><span style="color:var(--amber)">⚠ Outros lançamentos</span><span style="color:var(--amber)">${fmt(d.fatura_outros)}</span></div>
+    <div class="fatura-row"><span style="color:var(--muted)">Pagamento recebido <span style="font-size:9px;color:var(--nu-light);margin-left:4px">(ref. fatura ${typeof d.fatura_pagamento==='object'?(d.fatura_pagamento.ref||'').toUpperCase():'?'})</span></span><span style="color:var(--green)">− ${fmt(typeof d.fatura_pagamento==='object'?d.fatura_pagamento.valor:d.fatura_pagamento)}</span></div>
+    <div class="fatura-row total"><span>Total da Fatura</span><span style="color:var(--nu-light)">${fmt(d.fatura_valor)}</span></div>`;
+}
+
+function renderRDB(){
+  const d=META[mesSel];
+  if(d._emAberto){
+    const pctEst=Math.round((d.fatura_valor/d.limite_total_est)*100);
+    document.getElementById('rdbCard').innerHTML=`
+      <div class="card-label">Nu Limite Garantido · RDB como garantia (estimado)</div>
+      <div style="font-family:Arial,sans-serif;font-size:20px;font-weight:700;color:var(--nu-light);margin-top:6px">${fmt(d.rdb_saldo)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:2px">Saldo RDB estimado · ref. 18/04/2026</div>
+      <div class="rdb-bar-bg"><div class="rdb-bar-fill" style="width:${pctEst}%"></div></div>
+      <div class="rdb-labels"><span>Fatura em aberto: ${fmt(d.fatura_valor)}</span><span>${pctEst}% do limite</span></div>
+      <div class="rdb-stats">
+        <div><div class="rdb-stat-label">LIMITE TOTAL EST.</div><div class="rdb-stat-val" style="color:var(--text)">${fmt(d.limite_total_est)}</div></div>
+        <div><div class="rdb-stat-label">FATURA EM ABERTO</div><div class="rdb-stat-val" style="color:var(--amber)">${fmt(d.fatura_valor)}</div></div>
+        <div><div class="rdb-stat-label">COMPROMISSOS JUN+</div><div class="rdb-stat-val" style="color:var(--muted)">R$ 1.265,31</div></div>
+        <div><div class="rdb-stat-label">DISPONÍVEL EST.</div><div class="rdb-stat-val" style="color:var(--green)">${fmt(d.limite_disp_est ?? (d.limite_total_est - d.fatura_valor - (d.total_compromissos_futuros||0)))}</div></div>
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-top:10px">⚠ Estimativa baseada em movimentações conhecidas. Importe o extrato de maio para dados exatos.</div>`;
+    return;
+  }
+  const pct=Math.round((d.limite_usado/d.limite_garantido)*100);
+  document.getElementById('rdbCard').innerHTML=`
+    <div class="card-label">Nu Limite Garantido · RDB como garantia</div>
+    <div style="font-family:Arial,sans-serif;font-size:20px;font-weight:700;color:var(--nu-light);margin-top:6px">${fmt(d.rdb_saldo)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">Reserva disponível no RDB</div>
+    <div class="rdb-bar-bg"><div class="rdb-bar-fill" style="width:${pct}%"></div></div>
+    <div class="rdb-labels"><span>Limite usado: ${fmt(d.limite_usado)}</span><span>${pct}%</span></div>
+    <div class="rdb-stats">
+      <div><div class="rdb-stat-label">APLICADO NO MÊS</div><div class="rdb-stat-val" style="color:var(--red)">− ${fmt(d.rdb_aplicado)}</div></div>
+      <div><div class="rdb-stat-label">RESGATADO NO MÊS</div><div class="rdb-stat-val" style="color:var(--green)">+ ${fmt(d.rdb_resgatado)}</div></div>
+      <div><div class="rdb-stat-label">LIMITE TOTAL</div><div class="rdb-stat-val" style="color:var(--muted)">${fmt(d.limite_garantido)}</div></div>
+      <div><div class="rdb-stat-label">% COBERTO</div><div class="rdb-stat-val" style="color:var(--nu-light)">${pct}%</div></div>
+    </div>`;
+}
+
+function renderCats(){
+  const d=META[mesSel];
+  const total=d.categorias.reduce((s,c)=>s+c.valor,0);
+  document.getElementById('catList').innerHTML=d.categorias.map(c=>`
+    <div class="cat-row">
+      <div class="cat-dot" style="background:${c.cor}"></div>
+      <div class="cat-name">${c.nome}</div>
+      <div class="cat-bar-wrap"><div class="cat-bar" style="width:${(c.valor/total*100).toFixed(1)}%;background:${c.cor}"></div></div>
+      <div class="cat-val">${fmt(c.valor)}</div>
+    </div>`).join('');
+  if(chartInst)chartInst.destroy();
+  chartInst=new Chart(document.getElementById('donutChart').getContext('2d'),{
+    type:'doughnut',
+    data:{labels:d.categorias.map(c=>c.nome),datasets:[{data:d.categorias.map(c=>c.valor),backgroundColor:d.categorias.map(c=>c.cor),borderWidth:2,borderColor:'#16161a',hoverOffset:8}]},
+    options:{cutout:'68%',plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${fmt(ctx.raw)}`},backgroundColor:'#1e1e24',titleColor:'#f0f0f5',bodyColor:'#a0a0b0',borderColor:'#2a2a35',borderWidth:1}}}
+  });
+}
+
+// ── Controles ────────────────────────────────────────────────────────────────
+// ── REORDENAR CARDS ──────────────────────────────────────────────────────────
+function moveCard(btn, direction) {
+  const card = btn.closest('.sortable-card');
+  const grid = card.parentElement;
+  const cards = [...grid.querySelectorAll('.sortable-card')];
+  const idx = cards.indexOf(card);
+
+  if (direction === -1 && idx > 0) {
+    grid.insertBefore(card, cards[idx - 1]);
+  } else if (direction === 1 && idx < cards.length - 1) {
+    grid.insertBefore(cards[idx + 1], card);
+  }
+  updateCardArrows(grid);
+}
+
+function updateCardArrows(grid) {
+  const cards = [...grid.querySelectorAll('.sortable-card')];
+  cards.forEach((card, idx) => {
+    const btnLeft  = card.querySelector('.arrow-left');
+    const btnRight = card.querySelector('.arrow-right');
+    if (btnLeft)  btnLeft.disabled  = idx === 0;
+    if (btnRight) btnRight.disabled = idx === cards.length - 1;
+  });
+}
+
+function addArrowsToGrid(gridId) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
+  grid.querySelectorAll('.sortable-card').forEach(card => {
+    if (card.querySelector('.card-arrows')) return; // já tem
+    const arrows = document.createElement('div');
+    arrows.className = 'card-arrows';
+    arrows.innerHTML =
+      '<button class="card-arrow arrow-left"  onclick="moveCard(this,-1)" title="Mover para esquerda">←</button>' +
+      '<button class="card-arrow arrow-right" onclick="moveCard(this,1)"  title="Mover para direita">→</button>';
+    card.style.position = 'relative';
+    card.appendChild(arrows);
+  });
+  updateCardArrows(grid);
+}
+
+
+function setMonth(m,el){mesSel=m;document.querySelectorAll('.month-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');populateSemanas();render();}
+
+// ── TOGGLE PAINÉIS ────────────────────────────────────────────────────────────
+function togglePanel(panelId, btn) {
+  const panel = document.getElementById(panelId);
+  const collapsed = panel.classList.toggle('is-collapsed');
+  btn.textContent = collapsed ? '▼' : '▲';
+  btn.title = collapsed ? 'Expandir' : 'Colapsar';
+  // Redesenhar chart ao expandir o painel de categorias
+  if (!collapsed && panelId === 'panel-cats') {
+    requestAnimationFrame(() => requestAnimationFrame(() => renderCats()));
+  }
+}
+
+populateSemanas();render();
+// ── VALIDAÇÃO AUTOMÁTICA DE CONTINUIDADE DE SALDO ENTRE MESES ───────────────
+// Verifica se inicio[mês] == fim[mês anterior]. Emite alerta no painel se houver divergência.
+function validarContinuidadeSaldos() {
+  const meses = ['mar','abr','mai'];
+  const alertas = [];
+  for(let i = 1; i < meses.length; i++) {
+    const mesAtual   = meses[i];
+    const mesAnterior = meses[i-1];
+    const fimAnterior = SALDOS_PDF[mesAnterior]?.fim;
+    const inicioAtual = SALDOS_PDF[mesAtual]?.inicio;
+    if(fimAnterior == null || inicioAtual == null) continue; // mês sem PDF ainda
+    const diff = Math.abs(inicioAtual - fimAnterior);
+    if(diff > 0.02) {
+      alertas.push(
+        `⚠️ Saldo: início de <strong>${mesAtual.toUpperCase()}</strong> (R$ ${fmt(inicioAtual)}) ` +
+        `≠ fim de <strong>${mesAnterior.toUpperCase()}</strong> (R$ ${fmt(fimAnterior)}) ` +
+        `— divergência de <strong>R$ ${fmt(diff)}</strong>. Verificar entrada não registrada.`
+      );
+    }
+    // Cruzar também com META.saldo_inicial
+    const saldoMeta = META[mesAtual]?.saldo_inicial;
+    if(saldoMeta != null && Math.abs(saldoMeta - inicioAtual) > 0.02) {
+      alertas.push(
+        `⚠️ META['${mesAtual}'].saldo_inicial (R$ ${fmt(saldoMeta)}) ` +
+        `diverge de SALDOS_PDF['${mesAtual}'].inicio (R$ ${fmt(inicioAtual)}) ` +
+        `— diferença de R$ ${fmt(Math.abs(saldoMeta - inicioAtual))}.`
+      );
+    }
+  }
+  const el = document.getElementById('alertaAuditoriaSaldos');
+  if(!el) return;
+  if(alertas.length) {
+    el.innerHTML = alertas.map(a =>
+      `<div style="padding:7px 14px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.25);border-radius:8px;font-size:11px;color:#f87171;margin-bottom:6px">${a}</div>`
+    ).join('');
+    console.warn('[Auditoria Saldos]', alertas);
+  } else {
+    el.innerHTML = '';
+  }
+}
+function setView(v,el){viewSel=v;document.querySelectorAll('.view-tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');renderTx();}
+function setOrigem(v,el){origemF=v;document.querySelectorAll('#bOT,#bOC,#bOD').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderSemana();}
+function setTipo(v,el){tipoF=v;document.querySelectorAll('#bTT,#bTE,#bTS').forEach(b=>b.classList.remove('active'));el.classList.add('active');renderSemana();}
+function limparFiltros(){origemF='todos';tipoF='todos';document.getElementById('inputBusca').value='';document.querySelectorAll('#bOT,#bTT').forEach(b=>b.classList.add('active'));document.querySelectorAll('#bOC,#bOD,#bTE,#bTS').forEach(b=>b.classList.remove('active'));renderSemana();}
+
+function expandAllTx(expand){
+  // Encontrar todos os triângulos de lançamentos (id começa com txTri_)
+  document.querySelectorAll('[id^="txTri_"]').forEach(tri=>{
+    const groupId=tri.id.replace('txTri_','');
+    const rows=document.querySelectorAll('.tx-child-'+groupId);
+    const headerRow=tri.closest('tr');
+    const isOpen=tri.dataset.open!=='0';
+    if(expand&&!isOpen){
+      rows.forEach(r=>{r.style.display='';});
+      tri.innerHTML='▼';
+      tri.dataset.open='1';
+      if(headerRow)headerRow.style.opacity='1';
+    } else if(!expand&&isOpen){
+      rows.forEach(r=>{r.style.display='none';});
+      tri.innerHTML='▶';
+      tri.dataset.open='0';
+      if(headerRow)headerRow.style.opacity='0.6';
+    }
+  });
+}
+
+function expandAllWeek(expand){
+  document.querySelectorAll('[id^="tri_wg"]').forEach(tri=>{
+    const groupId=tri.id.replace('tri_','');
+    const rows=document.querySelectorAll('.week-child-'+groupId);
+    const headerRow=tri.closest('tr');
+    const isOpen=tri.dataset.open!=='0';
+    if(expand&&!isOpen){
+      rows.forEach(r=>{r.style.display='';});
+      tri.innerHTML='▼';
+      tri.dataset.open='1';
+      if(headerRow)headerRow.style.opacity='1';
+    } else if(!expand&&isOpen){
+      rows.forEach(r=>{r.style.display='none';});
+      tri.innerHTML='▶';
+      tri.dataset.open='0';
+      if(headerRow)headerRow.style.opacity='0.6';
+    }
+  });
+}
+
+function toggleTxGroup(groupId, headerRow){
+  const rows=document.querySelectorAll('.tx-child-'+groupId);
+  const tri=document.getElementById('txTri_'+groupId);
+  const isOpen=tri.dataset.open!=='0';
+  rows.forEach(r=>{r.style.display=isOpen?'none':'';});
+  tri.innerHTML=isOpen?'▶':'▼';
+  tri.dataset.open=isOpen?'0':'1';
+  headerRow.style.opacity=isOpen?'0.6':'1';
+}
+
+function toggleWeekGroup(groupId, headerRow){
+  const rows=document.querySelectorAll('.week-child-'+groupId);
+  const tri=document.getElementById('tri_'+groupId);
+  const isOpen=tri.dataset.open!=='0';
+  rows.forEach(r=>{r.style.display=isOpen?'none':'';});
+  tri.innerHTML=isOpen?'▶':'▼';
+  tri.dataset.open=isOpen?'0':'1';
+  headerRow.style.opacity=isOpen?'0.6':'1';
+}
+
+function render(){
+  renderKPIs();renderFatura();renderRDB();renderSemana();renderTx();
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    renderCats();
+    addArrowsToGrid('kpis');
+  }));
+}
+
+// ── Detectar mês e semana atuais ────────────────────────────────────────────
+(function initMesAtual() {
+  const hoje = new Date();
+  const ano  = hoje.getFullYear();
+  const mes  = hoje.getMonth(); // 0-indexed: 0=jan, 2=mar, 3=abr, 4=mai
+
+  // Meses disponíveis no sistema
+  const mesesDisp = { mar:[2026,2], abr:[2026,3], mai:[2026,4] };
+
+  // Encontrar o mês disponível mais próximo do atual
+  let mesSelecionado = 'mai'; // padrão: mais recente
+  Object.entries(mesesDisp).forEach(([key,[y,m]]) => {
+    if(ano === y && mes === m) mesSelecionado = key;
+  });
+
+  mesSel = mesSelecionado;
+
+  // Ativar a aba correta visualmente
+  document.querySelectorAll('.month-tab').forEach(btn => {
+    btn.classList.remove('active');
+    const txt = btn.textContent.trim().toLowerCase();
+    if(txt.startsWith(mesSelecionado)) btn.classList.add('active');
+  });
+})();
+
+populateSemanas();
+render();
+renderArquivos();
+
+// Selecionar a semana atual no dropdown após populateSemanas
+(function initSemanaAtual() {
+  const sel = document.getElementById('selSemana');
+  if(!sel) return;
+  const hoje = new Date();
+  const semanas = getSemanas(mesSel);
+  let melhor = semanas.length - 1; // padrão: última semana
+  semanas.forEach((s, i) => {
+    if(hoje >= s.inicio && hoje <= s.fim) melhor = i;
+  });
+  sel.value = melhor;
+  renderSemana();
+})();
+// ── PAINEL SITUAÇÃO ATUAL (dinâmico, lê do META mai) ─────────────────────────
+function renderPainelAtual(){
+  const d = META['mai']; // sempre usa o mês mais recente (mai)
+
+  // Saldo bancário: derivado de SALDOS_PDF confirmado (abr.fim), não hardcoded
+  const saldo = SALDOS_PDF['abr'].fim; // R$ 401,04 — auditado pelo PDF de abr/2026
+
+  const faturaAberto = d.fatura_valor;
+
+  // ── Limite: cálculo dinâmico documentado ─────────────────────────────────
+  // limite_total = rdb_saldo + 3200 (base fixo Nubank estimado)
+  // limite_disp  = limite_total - fatura_aberto - compromissos_futuros (parcelas Jun+)
+  // Fórmula confirmada: o valor disponível já desconta as parcelas futuras assumidas.
+  const LIMITE_BASE_FIXO = 3200; // base Nubank sem RDB (ajustar se mudar)
+  const limTotal = d.limite_total_est || (d.rdb_saldo + LIMITE_BASE_FIXO);
+  const compromissos = d.total_compromissos_futuros || 0;
+  const limDisp  = d.limite_disp_est  ?? (limTotal - faturaAberto - compromissos);
+  const rdb = d.rdb_saldo;
+  const comprometido = limTotal - limDisp;
+  const pct = Math.round((comprometido / limTotal) * 100);
+
+  document.getElementById('painelCards').innerHTML = `
+    <div class="sortable-card" style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:14px">
+      <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Saldo Bancário</div>
+      <div style="font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:var(--green)">${fmt(saldo)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Em conta em 23/04/2026</div>
+    </div>
+    <div class="sortable-card" style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:14px">
+      <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Fatura em Aberto</div>
+      <div style="font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:var(--amber)">${fmt(faturaAberto)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">14/ABR → 24/ABR · fecha 14/05</div>
+    </div>
+    <div class="sortable-card" style="background:rgba(255,255,255,.03);border:1px solid rgba(239,68,68,.2);border-radius:12px;padding:14px">
+      <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Próximo Débito (Fatura)</div>
+      <div style="font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:var(--amber)">${fmt(faturaAberto)}+</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">Fatura MAI · vence 21/05/2026</div>
+      <div style="font-size:10px;color:var(--amber);margin-top:2px">⏳ Em aberto · fecha 14/05/2026</div>
+    </div>
+    <div class="sortable-card" style="background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:14px">
+      <div style="font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-bottom:8px">Limite Disponível Est.</div>
+      <div style="font-family:Arial,sans-serif;font-size:22px;font-weight:700;color:${limDisp<2000?'var(--amber)':'var(--green)'}">${fmt(limDisp)}</div>
+      <div style="font-size:10px;color:var(--muted);margin-top:4px">De ${fmt(limTotal)} total</div>
+      <div style="height:4px;background:var(--border);border-radius:4px;overflow:hidden;margin-top:8px">
+        <div style="width:${pct}%;height:100%;background:var(--amber);border-radius:4px"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);margin-top:3px">
+        <span>Comprometido: ${fmt(comprometido)}</span><span>${pct}%</span>
+      </div>
+    </div>`;
+
+  document.getElementById('painelAlerta').innerHTML = saldo < faturaAberto
+    ? `<div style="padding:8px 14px;background:rgba(239,68,68,.07);border:1px solid rgba(239,68,68,.2);border-radius:8px;font-size:11px;color:#f87171;display:flex;align-items:center;gap:8px">
+        ⚠️ <span>Saldo bancário (${fmt(saldo)}) é inferior ao próximo débito estimado (${fmt(faturaAberto)}+). A fatura fecha em 14/05 — garanta saldo suficiente até 21/05/2026.</span>
+       </div>`
+    : '';
+}
+
+// Data atual no painel
+const hoje = new Date();
+document.getElementById('dataAtual').textContent = hoje.toLocaleDateString('pt-BR',{weekday:'short',day:'2-digit',month:'2-digit',year:'numeric'}).toUpperCase();
+renderPainelAtual();
+validarContinuidadeSaldos();
+// Adicionar setas nos cards do painel Situação Atual após render
+requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards')));
+</script>
+<!-- ── SUPABASE: sincronização automática ─────────────────────────────── -->
+<script type="module">
+  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+  const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+  const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY
+  const supabase = createClient(SUPABASE_URL, SUPABASE_KEY)
+
+  window.__supabase = supabase
+
+  // ── Salvar snapshot do META no Supabase (chama após cada render) ──────
+  window.syncToSupabase = async function(payload) {
+    if (!supabase) return
+    const { error } = await supabase
+      .from('snapshots')
+      .upsert({ id: 'dashboard_state', data: payload, updated_at: new Date().toISOString() })
+    if (error) console.warn('[Supabase sync error]', error.message)
+    else console.log('[Supabase] Estado sincronizado ✓')
+  }
+
+  // ── Carregar último estado salvo ao abrir o dashboard ────────────────
+  window.loadFromSupabase = async function() {
+    const { data, error } = await supabase
+      .from('snapshots')
+      .select('data')
+      .eq('id', 'dashboard_state')
+      .single()
+    if (error) { console.warn('[Supabase load]', error.message); return null }
+    return data?.data ?? null
+  }
+
+  console.log('[Supabase] Cliente inicializado ✓', SUPABASE_URL)
+</script>
+</body>
+</html>
