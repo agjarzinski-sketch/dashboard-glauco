@@ -1,93 +1,190 @@
-# Instruções para o Claude Code — Dashboard Glauco
+# CLAUDE.md — Dashboard Financeiro Glauco 2026
+# Leia este arquivo inteiro antes de executar qualquer tarefa.
+# Atualizado em: 25/04/2026
 
-Execute tudo abaixo na ordem. Não pule etapas.
+---
 
-## Dados do projeto
+## 1. VISÃO GERAL DO PROJETO
 
-- GitHub: https://github.com/agjarzinski-sketch/dashboard-glauco.git
-- Supabase URL: https://orgdhapoyhgyhedqbobi.supabase.co
-- Supabase Key: sb_publishable_h2hQzgKTBNUtyhaMit81lg_1HzU6wzy
+Dashboard financeiro pessoal do Angelo Glauco Jarzinski.
+Controla gastos, faturas Nubank, saldo bancário e investimentos RDB.
 
-## Tarefa
+- **Dono:** Angelo Glauco Jarzinski
+- **Banco:** Nubank · Conta 59962602-0
+- **Período coberto:** Março, Abril e Maio de 2026
+- **URL pública:** https://dashboard-glauco.vercel.app
+- **Status:** Produção — deploy automático ativo
 
-1. Crie a pasta `C:\projetos\dashboard-glauco\` se não existir
+---
 
-2. Dentro dela, crie o arquivo `.env` com o conteúdo:
+## 2. STACK TÉCNICA
+
+| Tecnologia | Função |
+|---|---|
+| HTML + CSS + JS puro | Frontend — arquivo único index.html |
+| Vite | Build tool |
+| Supabase (PostgreSQL) | Banco de dados na nuvem |
+| GitHub | Versionamento |
+| Vercel | Hospedagem e deploy automático |
+| Claude Code | Agente de desenvolvimento (você) |
+
+### Fluxo de deploy automático
+1. Claude edita os arquivos do projeto
+2. Claude Code executa `push.ps1`
+3. GitHub recebe o commit na branch `main`
+4. Vercel detecta e publica em ~30 segundos
+5. Site atualizado em dashboard-glauco.vercel.app
+
+---
+
+## 3. CREDENCIAIS E ACESSOS
+
+### GitHub
+- Usuário: agjarzinski-sketch
+- Repositório: dashboard-glauco
+- URL: https://github.com/agjarzinski-sketch/dashboard-glauco
+- Branch: main
+
+### Supabase
+- Project URL: https://orgdhapoyhgyhedqbobi.supabase.co
+- Publishable Key: sb_publishable_h2hQzgKTBNUtyhaMit81lg_1HzU6wzy
+- Plano: Free (NANO) · Região: us-west-2
+- Tabela: snapshots (id text PK, data jsonb, updated_at timestamptz)
+
+### Vercel
+- Conta: agjarzinski-1624
+- URL: dashboard-glauco.vercel.app
+- Env vars configuradas: VITE_SUPABASE_URL, VITE_SUPABASE_KEY
+
+---
+
+## 4. ESTRUTURA DE ARQUIVOS
+
+### Código — C:\projetos\
 ```
-VITE_SUPABASE_URL=https://orgdhapoyhgyhedqbobi.supabase.co
-VITE_SUPABASE_KEY=sb_publishable_h2hQzgKTBNUtyhaMit81lg_1HzU6wzy
+C:\projetos\
+    dashboard-glauco\        ← PASTA PRINCIPAL DESTE PROJETO
+        index.html           ← dashboard (1.650+ linhas) — arquivo principal
+        .env                 ← chaves Supabase (NUNCA commitar)
+        .gitignore           ← protege .env e node_modules
+        push.ps1             ← script de deploy automático
+        package.json         ← dependências Vite + Supabase
+        CLAUDE.md            ← este arquivo
+        supabase-setup.sql   ← SQL de criação da tabela
+        README.md            ← documentação
+    safra_precos\
+    PROJETO_CLAUDE_AI\
+    Antigravity\
 ```
 
-3. Crie o arquivo `.gitignore` com:
+### Documentos — G:\Meu Drive\
 ```
-node_modules/
-dist/
-.env
-.env.local
-.DS_Store
+G:\Meu Drive\
+    01 - Financeiro\
+        Faturas\
+        Extratos\
+        Planilhas\
+    02 - Projetos\
+        Dashboard-Glauco\    ← inventario-dashboard-glauco.docx aqui
+        Outros\
+    03 - Documentos\
+    04 - Relatorios\
+    05 - Scripts\
+    06 - Instrucoes e Manuais\
+    07 - Arquivo Morto\
 ```
 
-4. Crie o arquivo `README.md` com:
-```
-# Dashboard Glauco 2026
-Dashboard financeiro pessoal com deploy automático via GitHub + Vercel + Supabase.
+---
 
-## Como enviar atualizações
-Abra o PowerShell na pasta do projeto e rode:
+## 5. DADOS DO DASHBOARD
+
+### Saldos por mês
+| Mês | Saldo Inicial | Entradas | Saídas | Saldo Final |
+|---|---|---|---|---|
+| Março 2026 | R$ 309,73 | R$ 7.342,27 | R$ 6.879,72 | R$ 772,28 |
+| Abril 2026 | R$ 772,28 | R$ 16.486,56 | R$ 16.857,80 | R$ 401,04 |
+| Maio 2026 | R$ 401,04 | Em aberto | Em aberto | — |
+
+### Faturas Nubank
+| Mês | Fatura | Compras | IOF | Outros | Pagamento |
+|---|---|---|---|---|---|
+| Março | R$ 6.881,53 | R$ 6.729,86 | R$ 13,00 | R$ 138,66 | Ref. Fev — R$ 6.257,47 |
+| Abril | R$ 4.135,01 | R$ 3.974,76 | R$ 3,95 | R$ 156,30 | Ref. Mar — R$ 6.881,53 |
+| Maio | R$ 5.120,26 | R$ 5.095,52 | R$ 24,74 | R$ 0 | Ref. Abr — R$ 4.135,01 |
+
+### Investimento RDB (mai/2026)
+- Saldo RDB: R$ 7.306,05
+- Limite total estimado: R$ 10.506,05
+- Limite disponível estimado: R$ 1.537,89
+- Fórmula: `limite_disp = limite_total - fatura_aberta - compromissos_futuros`
+
+---
+
+## 6. REGRAS DE OPERAÇÃO — LEIA SEMPRE
+
+1. **Pasta de trabalho:** sempre `C:\projetos\dashboard-glauco\`
+2. **NUNCA commitar `.env`** — as chaves Supabase ficam só localmente
+3. **Antes de editar index.html:** faça backup com sufixo `_BACKUP_DDMMYYYY`
+4. **Edite com str_replace** — nunca reescreva o arquivo inteiro
+5. **Após cada alteração:** execute `push.ps1` para publicar
+6. **index.html tem 1.650+ linhas** — use buscas precisas antes de editar
+
+### Comando de deploy
+```powershell
+cd C:\projetos\dashboard-glauco
 .\push.ps1
-O site atualiza sozinho em ~30 segundos no Vercel.
 ```
 
-5. Crie o arquivo `push.ps1` com:
-```powershell
-$MSG = if ($args[0]) { $args[0] } else { "atualização dashboard $(Get-Date -Format 'dd/MM/yyyy HH:mm')" }
-Write-Host ">>> Enviando para o GitHub..." -ForegroundColor Cyan
-git add .
-git commit -m "$MSG"
-git push origin main
-Write-Host ">>> Pronto! Vercel publica em ~30 segundos." -ForegroundColor Green
+---
+
+## 7. CORREÇÕES JÁ APLICADAS (não refazer)
+
+| # | Correção |
+|---|---|
+| 1 | saldo_inicial mai: 501.04 → 401.04 (alinhado com SALDOS_PDF['abr'].fim) |
+| 2 | new Date(2026,1,1) → new Date(2026,2,1) — âncora de data corrigida para março |
+| 3 | ANCORA_DATA_STR removida (variável morta) |
+| 4 | limite_disp_est de maio: deixou de ser hardcoded, agora calculado dinamicamente |
+| 5 | fatura_pagamento virou objeto {valor, ref} nos três meses |
+| 6 | validarContinuidadeSaldos() adicionada — roda na inicialização |
+| 7 | Saldo bancário no painel lê de SALDOS_PDF['abr'].fim (não hardcoded) |
+
+---
+
+## 8. PENDÊNCIAS ABERTAS
+
+| Prioridade | Item | Descrição |
+|---|---|---|
+| ✅ Feito | Tabela Supabase | Criada em 26/04/2026 |
+| Alta | Divergência R$ 100,00 | saldo_inicial maio: verificar entrada não registrada em 01/05 |
+| Média | NuPay/KeetaBR | Categorizar R$ 138,66 (mar) e R$ 156,30 (abr) |
+| Baixa | Extrato 24/04 | Gap de 1 dia entre extrato CC e fatura mai |
+
+### Melhorias aprovadas para implementar
+- Parser de importação automática de CSV/PDF do Nubank
+- Status 'pendente' para transações não categorizadas
+- Fórmula documentada e dinâmica para limite_total_est
+
+---
+
+## 9. SUPABASE — SQL DE CRIAÇÃO DA TABELA
+
+```sql
+create table if not exists snapshots (
+  id         text primary key,
+  data       jsonb,
+  updated_at timestamptz default now()
+);
+
+alter table snapshots enable row level security;
+
+create policy "acesso público dashboard"
+  on snapshots for all
+  using (true)
+  with check (true);
 ```
 
-6. Copie o arquivo `dashboard-financeiro-CORRIGIDO.html` (que está nesta pasta) para `index.html`
+---
 
-7. Adicione antes de `</body>` no `index.html` o seguinte bloco:
-```html
-<script type="module">
-  import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-  const supabase = createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_KEY
-  )
-  window.__supabase = supabase
-  window.syncToSupabase = async (payload) => {
-    const { error } = await supabase
-      .from('snapshots')
-      .upsert({ id: 'dashboard_state', data: payload, updated_at: new Date().toISOString() })
-    if (error) console.warn('[Supabase]', error.message)
-    else console.log('[Supabase] Sincronizado ✓')
-  }
-  console.log('[Supabase] Inicializado ✓')
-</script>
-```
-
-8. Rode no PowerShell dentro da pasta `C:\projetos\dashboard-glauco\`:
-```powershell
-git init
-git remote add origin https://github.com/agjarzinski-sketch/dashboard-glauco.git
-git branch -M main
-git add .
-git commit -m "primeiro commit - dashboard financeiro"
-git push -u origin main
-```
-
-9. Confirme que o push foi bem sucedido abrindo https://github.com/agjarzinski-sketch/dashboard-glauco
-
-## Após o push
-
-Informe o usuário que:
-- O GitHub está atualizado ✅
-- O próximo passo é conectar ao Vercel em https://vercel.com → Add New Project → importar `dashboard-glauco`
-- Adicionar as variáveis de ambiente no Vercel:
-  - VITE_SUPABASE_URL = https://orgdhapoyhgyhedqbobi.supabase.co
-  - VITE_SUPABASE_KEY = sb_publishable_h2hQzgKTBNUtyhaMit81lg_1HzU6wzy
-- Clicar em Deploy
+*Gerado por Claude · Anthropic · 25/04/2026*
+*Inventário completo: G:\Meu Drive\02 - Projetos\Dashboard-Glauco\inventario-dashboard-glauco.docx*
