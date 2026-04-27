@@ -27,8 +27,15 @@ Controla faturas Nubank, saldo bancário e investimentos RDB.
 ## Últimas sessões
 - 25/04/2026 — Setup completo: GitHub, Vercel, Supabase, organização do PC
 - 26/04/2026 — Tabela Supabase criada, SQL do CRM removido, auditoria do INSTRUCOES.md
+- 27/04/2026 — Levantamento completo da planilha Excel (33 abas), definição de 16 categorias e 120 subcategorias, criação de 7 tabelas no Supabase, seed de categorias, tela de Configurações > Categorias com CRUD completo
 
-## Pendências
-- Verificar divergência de R$ 100,00 no saldo inicial de maio (entrada não registrada em 01/05?)
-- Categorizar lançamentos NuPay/KeetaBR: R$ 138,66 (mar) e R$ 156,30 (abr)
-- Implementar parser de importação automática de CSV do Nubank
+## Pendências (em ordem de prioridade)
+- Fase 2: Módulo de Lançamentos — Entradas e Saídas (substitui inserção manual no dashboard)
+- Fase 3: Módulo de Cartão de Crédito item a item
+- Fase 4: Dashboard evoluído com breakdown por categoria e totais automáticos
+- Fase 5: Gastos Fixos Recorrentes
+- Fase 6: Orçamento / Planejamento semanal e mensal
+- Fase 7: Créditos e Débitos Futuros
+- Fase 8: Painel de Dívidas
+- Fase 9: Fluxo de Caixa Projetado
+- Fase 10: Histórico e importação da planilha
