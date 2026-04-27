@@ -337,6 +337,7 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
     <button class="month-tab" onclick="setMonth('abr',this)">ABR 2026</button>
     <button class="month-tab active" onclick="setMonth('mai',this)">MAI 2026</button>
   </div>
+  <button class="config-btn" onclick="openCategoriasConfig()" title="Configurações">⚙</button>
 </div>
 
 <div class="alert">⚠ "Outros lançamentos" não identificados: <strong>R$ 138,66</strong> (março) e <strong>R$ 156,30</strong> (abril) — são compras via NuPay/KeetaBR. &nbsp;|&nbsp; 📅 Fatura de maio fecha em <strong>14/05/2026</strong> — dados até 24/04.</div>
@@ -1679,5 +1680,300 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
 
   console.log('[Supabase] Cliente inicializado ✓', SUPABASE_URL)
 </script>
+<!-- ══ CONFIGURAÇÕES > CATEGORIAS ════════════════════════════════════════════ -->
+<style>
+/* botão de settings no header */
+.config-btn {
+  background: var(--surface); border:1px solid var(--border); color:var(--muted);
+  width:38px; height:38px; border-radius:8px; cursor:pointer; font-size:18px;
+  margin-left:8px; transition: all .15s;
+  display:flex; align-items:center; justify-content:center;
+}
+.config-btn:hover { color: var(--nu-light); border-color: var(--nu); background: rgba(139,92,246,.08); }
+
+/* tela de configuração de categorias */
+.cat-config-toolbar {
+  display:flex; justify-content:space-between; align-items:center;
+  margin-bottom:14px; gap:10px; flex-wrap:wrap;
+}
+.cat-config-status { margin-top:14px; font-size:11px; }
+.btn-cat-action {
+  background: var(--nu); color:#fff; border:none; border-radius:7px;
+  padding:8px 14px; font-family:Arial,sans-serif; font-size:13px; font-weight:600;
+  cursor:pointer; transition: all .15s;
+}
+.btn-cat-action:hover { background: var(--nu-light); }
+.cat-row {
+  border:1px solid var(--border); border-radius:10px; margin-bottom:8px;
+  background: var(--surface2); overflow:hidden;
+}
+.cat-row-header {
+  display:flex; align-items:center; gap:10px; padding:10px 12px;
+  font-family:Arial,sans-serif; font-size:13px;
+}
+.cat-toggle {
+  background: transparent; border:1px solid var(--border); color:var(--muted);
+  width:24px; height:24px; border-radius:5px; cursor:pointer; font-size:10px; padding:0;
+  display:flex; align-items:center; justify-content:center;
+}
+.cat-toggle:hover { color: var(--nu-light); border-color: var(--nu); }
+.cat-name { flex:1; font-weight:600; color:var(--text); }
+.cat-tipo {
+  font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.6px;
+  min-width:78px; padding:3px 8px; border-radius:4px;
+}
+.cat-tipo-entrada { background: rgba(34,197,94,.12);  color: var(--green); }
+.cat-tipo-saida   { background: rgba(239,68,68,.12);  color: var(--red); }
+.cat-tipo-ambos   { background: rgba(59,130,246,.12); color: var(--blue); }
+.cat-count { font-size:10px; color:var(--muted); min-width:60px; text-align:right; }
+.cat-actions { display:flex; gap:4px; flex-shrink:0; }
+.cat-btn {
+  background: var(--surface); border:1px solid var(--border); color:var(--muted);
+  padding:5px 9px; border-radius:5px; cursor:pointer; font-size:11px;
+  font-family:'Courier New',monospace; transition: all .15s;
+}
+.cat-btn:hover { color: var(--nu-light); border-color: var(--nu); }
+.cat-btn.cat-btn-danger:hover { color: var(--red); border-color: var(--red); }
+.cat-subs {
+  background: var(--bg); border-top:1px solid var(--border);
+  padding:6px 12px 6px 46px;
+}
+.cat-sub-row {
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:7px 0; border-bottom: 1px solid rgba(255,255,255,.03);
+  font-family:Arial,sans-serif; font-size:12px;
+}
+.cat-sub-row:last-child { border-bottom:none; }
+.cat-sub-name { color:var(--text); flex:1; }
+.cat-empty { color:var(--muted); font-size:11px; padding:8px 0; font-style:italic; }
+</style>
+
+<div class="ds-panel" id="panel-config-cats" style="display:none">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">⚙ Configurações · Categorias</span>
+    <div class="ds-panel-controls">
+      <button class="ds-toggle-btn" onclick="closeCategoriasConfig()" title="Voltar ao dashboard">✕</button>
+    </div>
+  </div>
+  <div class="ds-panel-body">
+    <div class="cat-config-toolbar">
+      <span style="color:var(--muted);font-size:11px">Gerencie as categorias e subcategorias usadas no dashboard.</span>
+      <button class="btn-cat-action" onclick="addCategoria()">+ Nova Categoria</button>
+    </div>
+    <div id="catConfigList"></div>
+    <div id="catConfigStatus" class="cat-config-status"></div>
+  </div>
+</div>
+
+<script>
+/* ── Configurações > Categorias — CRUD via Supabase ────────────────────── */
+(function(){
+  const TIPOS = ['entrada','saida','ambos'];
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function getSb() {
+    if (!window.__supabase) {
+      alert('Supabase ainda não está pronto. Tente novamente em 1 segundo.');
+      return null;
+    }
+    return window.__supabase;
+  }
+
+  // estado de quais categorias estão expandidas (preserva entre re-renders)
+  const expanded = new Set();
+
+  window.openCategoriasConfig = async function() {
+    document.querySelectorAll('.ds-panel:not(#panel-config-cats)').forEach(p => {
+      p.dataset._cfgHidden = '1';
+      p.style.display = 'none';
+    });
+    document.querySelectorAll('.alert').forEach(a => { a.dataset._cfgHidden = '1'; a.style.display = 'none'; });
+    const mt = document.querySelector('.month-tabs'); if (mt) { mt.dataset._cfgHidden = '1'; mt.style.display = 'none'; }
+    const aud = document.getElementById('alertaAuditoriaSaldos'); if (aud) { aud.dataset._cfgHidden = '1'; aud.style.display = 'none'; }
+    document.getElementById('panel-config-cats').style.display = '';
+    await loadCategoriasConfig();
+  };
+
+  window.closeCategoriasConfig = function() {
+    document.querySelectorAll('[data-_cfg-hidden],[data-_cfgHidden]').forEach(el => {
+      el.style.display = '';
+      delete el.dataset._cfgHidden;
+    });
+    document.getElementById('panel-config-cats').style.display = 'none';
+  };
+
+  async function loadCategoriasConfig() {
+    const list = document.getElementById('catConfigList');
+    const status = document.getElementById('catConfigStatus');
+    status.innerHTML = '<span style="color:var(--muted)">Carregando…</span>';
+    const sb = getSb(); if (!sb) return;
+    const [resCats, resSubs] = await Promise.all([
+      sb.from('categorias').select('*').order('nome'),
+      sb.from('subcategorias').select('*').order('nome')
+    ]);
+    if (resCats.error || resSubs.error) {
+      list.innerHTML = '';
+      status.innerHTML = `<span style="color:var(--red)">Erro: ${(resCats.error || resSubs.error).message}</span>`;
+      return;
+    }
+    const subsBy = {};
+    for (const s of resSubs.data) (subsBy[s.categoria_id] ||= []).push(s);
+    list.innerHTML = resCats.data.map(c => renderCategoriaRow(c, subsBy[c.id] || [])).join('') ||
+      '<div class="cat-empty">Nenhuma categoria cadastrada. Clique em "+ Nova Categoria".</div>';
+    status.innerHTML = `<span style="color:var(--muted)">${resCats.data.length} categorias · ${resSubs.data.length} subcategorias</span>`;
+  }
+  window.loadCategoriasConfig = loadCategoriasConfig;
+
+  function renderCategoriaRow(c, subs) {
+    const isExp = expanded.has(c.id);
+    const subsHtml = subs.map(s => `
+      <div class="cat-sub-row">
+        <span class="cat-sub-name">${escapeHtml(s.nome)}</span>
+        <span class="cat-actions">
+          <button class="cat-btn" onclick="editSubcategoria('${s.id}')" title="Editar">✏</button>
+          <button class="cat-btn cat-btn-danger" onclick="deleteSubcategoria('${s.id}')" title="Excluir">✕</button>
+        </span>
+      </div>`).join('') || '<div class="cat-empty">Nenhuma subcategoria.</div>';
+    return `
+      <div class="cat-row" data-cat-id="${c.id}">
+        <div class="cat-row-header">
+          <button class="cat-toggle" onclick="toggleCatRow('${c.id}', this)" title="Expandir">${isExp ? '▼' : '▶'}</button>
+          <span class="cat-name">${escapeHtml(c.nome)}</span>
+          <span class="cat-tipo cat-tipo-${c.tipo}">${c.tipo}</span>
+          <span class="cat-count">${subs.length} sub${subs.length === 1 ? '' : 's'}</span>
+          <span class="cat-actions">
+            <button class="cat-btn" onclick="addSubcategoria('${c.id}')" title="Nova subcategoria">+ sub</button>
+            <button class="cat-btn" onclick="editCategoria('${c.id}')" title="Editar">✏</button>
+            <button class="cat-btn cat-btn-danger" onclick="deleteCategoria('${c.id}')" title="Excluir">✕</button>
+          </span>
+        </div>
+        <div class="cat-subs" style="display:${isExp ? '' : 'none'}">${subsHtml}</div>
+      </div>`;
+  }
+
+  window.toggleCatRow = function(catId, btn) {
+    const row = btn.closest('.cat-row');
+    const subs = row.querySelector('.cat-subs');
+    if (subs.style.display === 'none') {
+      subs.style.display = ''; btn.textContent = '▼'; expanded.add(catId);
+    } else {
+      subs.style.display = 'none'; btn.textContent = '▶'; expanded.delete(catId);
+    }
+  };
+
+  // ───────── CRUD CATEGORIAS ─────────
+  window.addCategoria = async function() {
+    const nome = prompt('Nome da nova categoria:');
+    if (!nome || !nome.trim()) return;
+    let tipo = prompt('Tipo (entrada / saida / ambos):', 'saida');
+    if (tipo === null) return;
+    tipo = (tipo || '').trim().toLowerCase();
+    if (!TIPOS.includes(tipo)) return alert('Tipo inválido. Use: entrada, saida ou ambos.');
+    const sb = getSb(); if (!sb) return;
+    const { error } = await sb.from('categorias').insert({ nome: nome.trim(), tipo });
+    if (error) return alert('Erro: ' + error.message);
+    await loadCategoriasConfig();
+  };
+
+  window.editCategoria = async function(id) {
+    const sb = getSb(); if (!sb) return;
+    const { data: c, error } = await sb.from('categorias').select('*').eq('id', id).single();
+    if (error) return alert('Erro: ' + error.message);
+    const novoNome = prompt('Nome da categoria:', c.nome);
+    if (novoNome === null) return;
+    if (!novoNome.trim()) return alert('Nome não pode ser vazio.');
+    let novoTipo = prompt('Tipo (entrada / saida / ambos):', c.tipo);
+    if (novoTipo === null) return;
+    novoTipo = (novoTipo || '').trim().toLowerCase();
+    if (!TIPOS.includes(novoTipo)) return alert('Tipo inválido.');
+    const { error: e2 } = await sb.from('categorias').update({ nome: novoNome.trim(), tipo: novoTipo }).eq('id', id);
+    if (e2) return alert('Erro: ' + e2.message);
+    await loadCategoriasConfig();
+  };
+
+  window.deleteCategoria = async function(id) {
+    const sb = getSb(); if (!sb) return;
+    // pega o nome
+    const { data: c } = await sb.from('categorias').select('nome').eq('id', id).single();
+    const nome = c?.nome || '(sem nome)';
+    // checa lancamentos vinculados a esta categoria
+    const { count: cLanc, error: eLanc } = await sb.from('lancamentos').select('id', { count: 'exact', head: true }).eq('categoria_id', id);
+    if (eLanc) return alert('Erro ao consultar lançamentos: ' + eLanc.message);
+    if (cLanc > 0) {
+      alert(`Não é possível excluir "${nome}".\n\n${cLanc} lançamento(s) vinculado(s) a esta categoria.\nReatribua-os a outra categoria antes de excluir.`);
+      return;
+    }
+    // checa cartao
+    const { count: cCart } = await sb.from('cartao').select('id', { count: 'exact', head: true }).eq('categoria_id', id);
+    if (cCart > 0) {
+      alert(`Não é possível excluir "${nome}".\n\n${cCart} compra(s) de cartão vinculada(s) a esta categoria.`);
+      return;
+    }
+    // conta subs (informativo — serão excluídas em cascade)
+    const { count: cSubs } = await sb.from('subcategorias').select('id', { count: 'exact', head: true }).eq('categoria_id', id);
+    const aviso = cSubs > 0
+      ? `Excluir categoria "${nome}"?\n\n⚠ Isso também excluirá ${cSubs} subcategoria(s) (cascade).`
+      : `Excluir categoria "${nome}"?`;
+    if (!confirm(aviso)) return;
+    const { error: eDel } = await sb.from('categorias').delete().eq('id', id);
+    if (eDel) return alert('Erro: ' + eDel.message);
+    expanded.delete(id);
+    await loadCategoriasConfig();
+  };
+
+  // ───────── CRUD SUBCATEGORIAS ─────────
+  window.addSubcategoria = async function(catId) {
+    const sb = getSb(); if (!sb) return;
+    const { data: c } = await sb.from('categorias').select('nome').eq('id', catId).single();
+    const catNome = c?.nome || '';
+    const nome = prompt(`Nova subcategoria em "${catNome}":`);
+    if (!nome || !nome.trim()) return;
+    const { error } = await sb.from('subcategorias').insert({ categoria_id: catId, nome: nome.trim() });
+    if (error) return alert('Erro: ' + error.message);
+    expanded.add(catId);
+    await loadCategoriasConfig();
+  };
+
+  window.editSubcategoria = async function(id) {
+    const sb = getSb(); if (!sb) return;
+    const { data: s, error } = await sb.from('subcategorias').select('nome,categoria_id').eq('id', id).single();
+    if (error) return alert('Erro: ' + error.message);
+    const novoNome = prompt('Nome da subcategoria:', s.nome);
+    if (novoNome === null) return;
+    if (!novoNome.trim()) return alert('Nome não pode ser vazio.');
+    const { error: e2 } = await sb.from('subcategorias').update({ nome: novoNome.trim() }).eq('id', id);
+    if (e2) return alert('Erro: ' + e2.message);
+    expanded.add(s.categoria_id);
+    await loadCategoriasConfig();
+  };
+
+  window.deleteSubcategoria = async function(id) {
+    const sb = getSb(); if (!sb) return;
+    const { data: s } = await sb.from('subcategorias').select('nome,categoria_id').eq('id', id).single();
+    const nome = s?.nome || '(sem nome)';
+    // checa lancamentos
+    const { count: cLanc, error: eLanc } = await sb.from('lancamentos').select('id', { count: 'exact', head: true }).eq('subcategoria_id', id);
+    if (eLanc) return alert('Erro ao consultar lançamentos: ' + eLanc.message);
+    if (cLanc > 0) {
+      alert(`Não é possível excluir "${nome}".\n\n${cLanc} lançamento(s) vinculado(s) a esta subcategoria.\nReatribua-os a outra subcategoria antes de excluir.`);
+      return;
+    }
+    const { count: cCart } = await sb.from('cartao').select('id', { count: 'exact', head: true }).eq('subcategoria_id', id);
+    if (cCart > 0) {
+      alert(`Não é possível excluir "${nome}".\n\n${cCart} compra(s) de cartão vinculada(s) a esta subcategoria.`);
+      return;
+    }
+    if (!confirm(`Excluir subcategoria "${nome}"?`)) return;
+    const { error: eDel } = await sb.from('subcategorias').delete().eq('id', id);
+    if (eDel) return alert('Erro: ' + eDel.message);
+    if (s?.categoria_id) expanded.add(s.categoria_id);
+    await loadCategoriasConfig();
+  };
+})();
+</script>
+
 </body>
 </html>
