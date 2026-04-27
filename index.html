@@ -287,9 +287,147 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
 .foot-note{font-size:10px;color:var(--muted);padding:8px 14px;border-top:1px solid var(--border);}
 @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 .card,.rdb-card,.week-card{animation:fadeUp .35s ease both;}
+
+/* ── BARRA LATERAL DE NAVEGAÇÃO ──────────────────────────────────── */
+body{padding:0;}
+.app-shell{display:flex;min-height:100vh;}
+.sidebar{
+  width:220px;flex-shrink:0;background:#0a0a0d;border-right:1px solid var(--border);
+  display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;height:100vh;
+  z-index:100;font-family:Arial,sans-serif;
+}
+.sidebar-brand{padding:18px 18px 14px;border-bottom:1px solid var(--border);}
+.sidebar-brand h2{font-size:15px;font-weight:800;letter-spacing:-.3px;color:var(--text);line-height:1.2;}
+.sidebar-brand h2 span{color:var(--nu-light);}
+.sidebar-brand p{font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:.6px;text-transform:uppercase;}
+.sidebar-nav{flex:1;overflow-y:auto;padding:10px 8px;}
+.sidebar-nav::-webkit-scrollbar{width:4px;}
+.sidebar-nav::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
+.nav-item{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;
+  color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;
+  border:none;background:transparent;width:100%;text-align:left;font-family:inherit;
+  margin-bottom:1px;
+}
+.nav-item:hover:not(.disabled):not(.active){color:var(--text);background:rgba(139,92,246,.07);}
+.nav-item.active{color:var(--nu-light);background:rgba(139,92,246,.13);}
+.nav-icon{font-size:14px;width:18px;text-align:center;flex-shrink:0;}
+.nav-item.disabled{color:#3f3f4a;cursor:not-allowed;}
+.nav-item.disabled:hover{background:transparent;}
+.nav-badge{
+  margin-left:auto;font-size:8px;letter-spacing:.5px;background:var(--surface2);color:var(--muted);
+  padding:2px 6px;border-radius:20px;text-transform:uppercase;font-weight:700;
+}
+.nav-group{margin-bottom:1px;}
+.nav-subgroup{
+  display:none;margin-left:16px;margin-top:2px;border-left:1px solid var(--border);padding-left:6px;
+}
+.nav-group.expanded > .nav-subgroup{display:block;}
+.nav-group.expanded > .nav-item{color:var(--text);}
+.nav-subitem{
+  display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:6px;
+  color:var(--muted);font-size:12px;font-weight:500;cursor:pointer;border:none;background:transparent;
+  width:100%;text-align:left;font-family:inherit;transition:all .15s;margin-bottom:1px;
+}
+.nav-subitem:hover:not(.active){color:var(--text);background:rgba(139,92,246,.05);}
+.nav-subitem.active{color:var(--nu-light);background:rgba(139,92,246,.13);}
+.nav-caret{margin-left:auto;font-size:9px;transition:transform .15s;color:var(--muted);}
+.nav-group.expanded > .nav-item .nav-caret{transform:rotate(90deg);}
+
+.sidebar-footer{
+  border-top:1px solid var(--border);padding:14px 16px;background:rgba(0,0,0,.25);
+}
+.sidebar-footer-title{
+  font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted);
+  margin-bottom:10px;font-weight:700;display:flex;justify-content:space-between;align-items:center;
+}
+.sidebar-footer-title .ref-mes{color:var(--nu-light);font-weight:700;letter-spacing:.5px;}
+.sidebar-stat{
+  display:flex;justify-content:space-between;align-items:center;font-size:11px;margin-bottom:7px;
+}
+.sidebar-stat:last-child{margin-bottom:0;padding-top:8px;margin-top:4px;border-top:1px dashed var(--border);}
+.sidebar-stat-label{color:var(--muted);text-transform:uppercase;font-size:9px;letter-spacing:.6px;font-weight:600;}
+.sidebar-stat-value{font-weight:700;font-variant-numeric:tabular-nums;font-family:Arial,sans-serif;font-size:12px;}
+.sidebar-stat-value.green{color:var(--green);}
+.sidebar-stat-value.red{color:var(--red);}
+.sidebar-stat-value.purple{color:var(--nu-light);}
+
+.app-main{flex:1;margin-left:220px;padding:32px 24px;min-width:0;}
+@media (max-width:768px){
+  .sidebar{width:64px;}
+  .sidebar-brand p,.nav-item span:not(.nav-icon):not(.nav-caret):not(.nav-badge),
+  .nav-subitem,.sidebar-footer{display:none;}
+  .app-main{margin-left:64px;}
+}
 </style>
 </head>
 <body>
+
+<div class="app-shell">
+
+<!-- ══ BARRA LATERAL DE NAVEGAÇÃO ═══════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <h2>Dashboard <span>Glauco</span></h2>
+    <p>Angelo G. Jarzinski</p>
+  </div>
+  <nav class="sidebar-nav" id="sidebarNav">
+    <button class="nav-item active" data-view="dashboard" onclick="navTo('dashboard')">
+      <span class="nav-icon">📊</span><span>Dashboard</span>
+    </button>
+    <div class="nav-group" id="navGroupLanc">
+      <button class="nav-item" data-view="lancamentos" onclick="toggleNavGroup('navGroupLanc')">
+        <span class="nav-icon">📋</span><span>Lançamentos</span><span class="nav-caret">▶</span>
+      </button>
+      <div class="nav-subgroup">
+        <button class="nav-subitem" data-view="lanc-entradas" onclick="navTo('lanc-entradas')">
+          <span>↑ Entradas</span>
+        </button>
+        <button class="nav-subitem" data-view="lanc-saidas" onclick="navTo('lanc-saidas')">
+          <span>↓ Saídas</span>
+        </button>
+      </div>
+    </div>
+    <button class="nav-item disabled" title="Em breve">
+      <span class="nav-icon">💳</span><span>Cartão de Crédito</span><span class="nav-badge">Em breve</span>
+    </button>
+    <button class="nav-item disabled" title="Em breve">
+      <span class="nav-icon">📌</span><span>Gastos Fixos</span><span class="nav-badge">Em breve</span>
+    </button>
+    <button class="nav-item disabled" title="Em breve">
+      <span class="nav-icon">🎯</span><span>Orçamento</span><span class="nav-badge">Em breve</span>
+    </button>
+    <button class="nav-item disabled" title="Em breve">
+      <span class="nav-icon">⚠</span><span>Dívidas</span><span class="nav-badge">Em breve</span>
+    </button>
+    <button class="nav-item disabled" title="Em breve">
+      <span class="nav-icon">💧</span><span>Fluxo de Caixa</span><span class="nav-badge">Em breve</span>
+    </button>
+    <button class="nav-item" data-view="configuracoes" onclick="navTo('configuracoes')">
+      <span class="nav-icon">⚙</span><span>Configurações</span>
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="sidebar-footer-title">
+      <span>Resumo do mês</span>
+      <span class="ref-mes" id="sidebarRefMes">—</span>
+    </div>
+    <div class="sidebar-stat">
+      <span class="sidebar-stat-label">Entradas</span>
+      <span class="sidebar-stat-value green" id="sidebarEntradas">R$ 0,00</span>
+    </div>
+    <div class="sidebar-stat">
+      <span class="sidebar-stat-label">Saídas</span>
+      <span class="sidebar-stat-value red" id="sidebarSaidas">R$ 0,00</span>
+    </div>
+    <div class="sidebar-stat">
+      <span class="sidebar-stat-label">Saldo</span>
+      <span class="sidebar-stat-value purple" id="sidebarSaldo">R$ 0,00</span>
+    </div>
+  </div>
+</aside>
+
+<main class="app-main">
 
 <!-- ══ PAINEL SITUAÇÃO ATUAL ════════════════════════════════════════════════ -->
 <div class="ds-panel" id="panel-situacao" style="background:linear-gradient(135deg,#1a1025 0%,#13131a 100%);border-color:rgba(139,92,246,.35)">
@@ -332,13 +470,15 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
     <h1>Controle de Gastos <span>2.0</span></h1>
     <p>ANGELO GLAUCO JARZINSKI · NUBANK · CONTA 59962602-0</p>
   </div>
-  <div class="month-tabs">
-    <button class="month-tab" onclick="setMonth('mar',this)">MAR 2026</button>
-    <button class="month-tab" onclick="setMonth('abr',this)">ABR 2026</button>
-    <button class="month-tab active" onclick="setMonth('mai',this)">MAI 2026</button>
+  <div class="header-user">
+    <span style="font-size:11px;color:var(--muted);letter-spacing:.5px">👤 Glauco</span>
   </div>
-  <button class="config-btn" onclick="openLancamentosScreen()" title="Lançamentos">📋</button>
-  <button class="config-btn" onclick="openCategoriasConfig()" title="Configurações">⚙</button>
+</div>
+
+<div class="month-tabs" id="dashboardMonthTabs" style="margin-bottom:20px;width:fit-content">
+  <button class="month-tab" onclick="setMonth('mar',this)">MAR 2026</button>
+  <button class="month-tab" onclick="setMonth('abr',this)">ABR 2026</button>
+  <button class="month-tab active" onclick="setMonth('mai',this)">MAI 2026</button>
 </div>
 
 <div class="alert">⚠ "Outros lançamentos" não identificados: <strong>R$ 138,66</strong> (março) e <strong>R$ 156,30</strong> (abril) — são compras via NuPay/KeetaBR. &nbsp;|&nbsp; 📅 Fatura de maio fecha em <strong>14/05/2026</strong> — dados até 24/04.</div>
@@ -2537,6 +2677,141 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
   };
 })();
 </script>
+
+<!-- ══ JS · NAVEGAÇÃO BARRA LATERAL ════════════════════════════════════════ -->
+<script>
+(function(){
+  function $(s){return document.querySelector(s);}
+  function $$(s){return document.querySelectorAll(s);}
+
+  function setActive(view){
+    $$('.nav-item, .nav-subitem').forEach(el => el.classList.remove('active'));
+    if (view === 'lanc-entradas' || view === 'lanc-saidas') {
+      const grp = document.getElementById('navGroupLanc');
+      grp.classList.add('expanded');
+      const sub = grp.querySelector(`[data-view="${view}"]`);
+      if (sub) sub.classList.add('active');
+    } else {
+      const item = document.querySelector(`.nav-item[data-view="${view}"]`);
+      if (item) item.classList.add('active');
+      // Recolhe o grupo de Lançamentos quando saímos dele
+      if (view !== 'lancamentos') {
+        document.getElementById('navGroupLanc').classList.remove('expanded');
+      }
+    }
+  }
+
+  window.toggleNavGroup = function(id){
+    document.getElementById(id).classList.toggle('expanded');
+  };
+
+  window.navTo = function(view){
+    // Sai de telas especiais primeiro
+    const cfg = $('#panel-config-cats');
+    const lanc = $('#panel-lancamentos');
+    if (view !== 'configuracoes' && cfg && cfg.style.display !== 'none' && typeof window.closeCategoriasConfig === 'function') {
+      window.closeCategoriasConfig();
+    }
+    if (view !== 'lanc-entradas' && view !== 'lanc-saidas' && lanc && lanc.style.display !== 'none' && typeof window.closeLancamentosScreen === 'function') {
+      window.closeLancamentosScreen();
+    }
+
+    if (view === 'dashboard') {
+      // Já fechamos as telas acima; nada mais a abrir
+    } else if (view === 'lanc-entradas' || view === 'lanc-saidas') {
+      const tipo = view === 'lanc-entradas' ? 'entrada' : 'saida';
+      window.openLancamentosScreen().then(() => {
+        const btn = document.querySelector(`.lanc-tab[data-tipo="${tipo}"]`);
+        if (btn && typeof window.setLancTipo === 'function') {
+          window.setLancTipo(tipo, btn);
+        }
+      });
+    } else if (view === 'configuracoes') {
+      window.openCategoriasConfig();
+    }
+
+    setActive(view);
+  };
+
+  // ── Resumo do mês no rodapé da sidebar ──────────────────────────────────
+  function fmtBRL(v){
+    const n = Number(v) || 0;
+    return 'R$ ' + n.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  async function carregarResumoMes(){
+    if (!window.__supabase) return;
+    const sb = window.__supabase;
+    const hoje = new Date();
+    const yyyy = hoje.getFullYear();
+    const mm = String(hoje.getMonth() + 1).padStart(2,'0');
+    const start = `${yyyy}-${mm}-01`;
+    const lastDay = new Date(yyyy, hoje.getMonth() + 1, 0).getDate();
+    const end = `${yyyy}-${mm}-${String(lastDay).padStart(2,'0')}`;
+
+    const meses = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+    const refEl = document.getElementById('sidebarRefMes');
+    if (refEl) refEl.textContent = `${meses[hoje.getMonth()]}/${String(yyyy).slice(2)}`;
+
+    const { data, error } = await sb.from('lancamentos').select('tipo,valor').gte('data', start).lte('data', end);
+    if (error) { console.warn('[sidebar] resumo:', error.message); return; }
+
+    let entradas = 0, saidas = 0;
+    for (const l of (data || [])) {
+      const v = Number(l.valor) || 0;
+      if (l.tipo === 'entrada') entradas += v;
+      else if (l.tipo === 'saida') saidas += v;
+    }
+    const saldo = entradas - saidas;
+
+    const e = document.getElementById('sidebarEntradas');
+    const s = document.getElementById('sidebarSaidas');
+    const sal = document.getElementById('sidebarSaldo');
+    if (e) e.textContent = fmtBRL(entradas);
+    if (s) s.textContent = fmtBRL(saidas);
+    if (sal) {
+      sal.textContent = fmtBRL(saldo);
+      sal.classList.remove('green','red','purple');
+      sal.classList.add(saldo >= 0 ? 'green' : 'red');
+    }
+  }
+  window.atualizarResumoSidebar = carregarResumoMes;
+
+  // Espera o Supabase ficar pronto
+  function aguardarSupabase(maxTentativas){
+    let n = 0;
+    const t = setInterval(() => {
+      n++;
+      if (window.__supabase) {
+        clearInterval(t);
+        carregarResumoMes();
+        // Patch: ao fechar telas pelo X, sincroniza sidebar e atualiza resumo
+        const _origCloseLanc = window.closeLancamentosScreen;
+        if (typeof _origCloseLanc === 'function') {
+          window.closeLancamentosScreen = function(){
+            _origCloseLanc();
+            setActive('dashboard');
+            carregarResumoMes();
+          };
+        }
+        const _origCloseCat = window.closeCategoriasConfig;
+        if (typeof _origCloseCat === 'function') {
+          window.closeCategoriasConfig = function(){
+            _origCloseCat();
+            setActive('dashboard');
+          };
+        }
+      }
+      else if (n >= maxTentativas) clearInterval(t);
+    }, 300);
+  }
+  document.addEventListener('DOMContentLoaded', () => aguardarSupabase(40));
+  if (document.readyState !== 'loading') aguardarSupabase(40);
+})();
+</script>
+
+</main>
+</div>
 
 </body>
 </html>
