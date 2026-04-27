@@ -2320,8 +2320,9 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
   // ── Modal ───────────────────────────────────────────────────────────────
   window.novoLancamento = function() {
     editingId = null;
-    document.getElementById('lancModalTitle').textContent = 'Novo Lançamento';
     const form = document.getElementById('lancForm');
+    delete form.dataset.editingId;
+    document.getElementById('lancModalTitle').textContent = 'Novo Lançamento';
     form.reset();
     form.querySelector(`input[name="tipo"][value="${tipoSel}"]`).checked = true;
     form.querySelector('input[name="data"]').value = new Date().toISOString().slice(0,10);
@@ -2335,31 +2336,83 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
 
   window.editLancamento = async function(id) {
     const sb = getSb(); if (!sb) return;
-    const { data: l, error } = await sb.from('lancamentos').select('*').eq('id', id).single();
-    if (error) return alert('Erro: ' + error.message);
-
-    editingId = id;
-    document.getElementById('lancModalTitle').textContent = 'Editar Lançamento';
     const form = document.getElementById('lancForm');
-    form.reset();
-    form.querySelector(`input[name="tipo"][value="${l.tipo}"]`).checked = true;
-    form.querySelector('input[name="data"]').value = l.data ? String(l.data).slice(0,10) : '';
-    form.querySelector('input[name="descricao"]').value = l.descricao || '';
-    form.querySelector('input[name="valor"]').value = l.valor;
-    form.querySelector(`input[name="status"][value="${l.status === 'pendente' ? 'pendente' : 'confirmado'}"]`).checked = true;
-    form.querySelector('textarea[name="obs"]').value = l.obs || '';
 
-    atualizarFormPorTipo();
-    if (l.categoria_id) {
-      document.getElementById('lancCategoriaSel').value = l.categoria_id;
-      atualizarSubcategoriaSel();
-      if (l.subcategoria_id) document.getElementById('lancSubcategoriaSel').value = l.subcategoria_id;
+    console.log('[Lançamentos] editLancamento(', id, ')');
+
+    // Marca estado de edição IMEDIATAMENTE (dataset + closure) — antes de qualquer async ou DOM
+    form.dataset.editingId = id;
+    editingId = id;
+
+    // Busca a linha
+    let l;
+    try {
+      const res = await sb.from('lancamentos').select('*').eq('id', id).single();
+      if (res.error) throw res.error;
+      if (!res.data) throw new Error('Lançamento não encontrado.');
+      l = res.data;
+      console.log('[Lançamentos] dados carregados:', l);
+    } catch (err) {
+      delete form.dataset.editingId;
+      editingId = null;
+      alert('Erro ao buscar lançamento: ' + (err?.message || err));
+      return;
     }
 
-    // edição não permite recriar parcelas
+    // Configura o modal
+    document.getElementById('lancModalTitle').textContent = 'Editar Lançamento';
+    form.reset();
+    // form.reset() não toca em dataset, mas reafirma por segurança
+    form.dataset.editingId = id;
+    editingId = id;
+
+    // Helpers defensivos
+    const setVal = (sel, val) => {
+      const el = form.querySelector(sel);
+      if (!el) { console.warn('[Lançamentos] elemento não encontrado:', sel); return; }
+      el.value = (val === null || val === undefined) ? '' : val;
+    };
+    const setRadio = (name, value) => {
+      if (value === null || value === undefined) return;
+      const el = form.querySelector(`input[name="${name}"][value="${value}"]`);
+      if (!el) { console.warn('[Lançamentos] radio não encontrado:', name, '=', value); return; }
+      el.checked = true;
+    };
+
+    // Tipo PRIMEIRO (precisa estar setado antes de atualizarFormPorTipo)
+    setRadio('tipo', l.tipo);
+
+    // Demais campos
+    setVal('input[name="data"]', l.data ? String(l.data).slice(0,10) : '');
+    setVal('input[name="descricao"]', l.descricao || '');
+    setVal('input[name="valor"]', l.valor != null ? l.valor : '');
+    setVal('textarea[name="obs"]', l.obs || '');
+    setRadio('status', l.status === 'pendente' ? 'pendente' : 'confirmado');
+
+    // Reconstrói opções de categoria conforme o tipo, depois seta o valor
+    atualizarFormPorTipo();
+    if (l.categoria_id) {
+      const catSel = document.getElementById('lancCategoriaSel');
+      catSel.value = l.categoria_id;
+      if (catSel.value !== l.categoria_id) {
+        console.warn('[Lançamentos] categoria_id não está na lista de opções:', l.categoria_id);
+      }
+      atualizarSubcategoriaSel();
+      if (l.subcategoria_id) {
+        const subSel = document.getElementById('lancSubcategoriaSel');
+        subSel.value = l.subcategoria_id;
+        if (subSel.value !== l.subcategoria_id) {
+          console.warn('[Lançamentos] subcategoria_id não está na lista de opções:', l.subcategoria_id);
+        }
+      }
+    }
+
+    // Edição não recria parcelas — info de parcela fica visível só na descrição da lista
     document.getElementById('lancParcelado').checked = false;
     document.getElementById('lancParcelado').disabled = true;
     document.getElementById('lancParcelasInputs').style.display = 'none';
+
+    console.log('[Lançamentos] form populado. editingId(closure):', editingId, '| dataset:', form.dataset.editingId);
 
     document.getElementById('lancModalBackdrop').style.display = 'flex';
   };
@@ -2367,6 +2420,7 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
   window.fecharLancModal = function() {
     document.getElementById('lancModalBackdrop').style.display = 'none';
     document.getElementById('lancParcelado').disabled = false;
+    delete document.getElementById('lancForm').dataset.editingId;
     editingId = null;
   };
 
@@ -2384,7 +2438,8 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
       cats.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
     document.getElementById('lancSubcategoriaSel').innerHTML = '<option value="">— Sem subcategoria —</option>';
     // parcelas só em entrada e só em criação (não edição)
-    document.getElementById('lancParcelasField').style.display = (tipo === 'entrada' && !editingId) ? '' : 'none';
+    const emEdicao = !!(document.getElementById('lancForm').dataset.editingId || editingId);
+    document.getElementById('lancParcelasField').style.display = (tipo === 'entrada' && !emEdicao) ? '' : 'none';
   }
 
   function atualizarSubcategoriaSel() {
@@ -2414,6 +2469,10 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
 
     try {
       const f = e.target;
+      // Lê estado de edição do dataset (fonte primária) com fallback no closure
+      const currentEditingId = f.dataset.editingId || editingId || null;
+      console.log('[Lançamentos] submit. editingId:', currentEditingId, '| dataset:', f.dataset.editingId, '| closure:', editingId);
+
       const tipo = f.querySelector('input[name="tipo"]:checked')?.value;
       const data = f.querySelector('input[name="data"]').value;
       const descricao = f.querySelector('input[name="descricao"]').value.trim();
@@ -2428,12 +2487,12 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
         return;
       }
 
-      const ehParcelado = !editingId && tipo === 'entrada' && document.getElementById('lancParcelado').checked;
+      const ehParcelado = !currentEditingId && tipo === 'entrada' && document.getElementById('lancParcelado').checked;
 
-      if (editingId) {
+      if (currentEditingId) {
         const { error } = await sb.from('lancamentos').update({
           tipo, data, descricao, valor, categoria_id, subcategoria_id, status, obs
-        }).eq('id', editingId);
+        }).eq('id', currentEditingId);
         if (error) throw error;
       } else if (ehParcelado) {
         const total_parcelas = parseInt(f.querySelector('input[name="total_parcelas"]').value, 10);
