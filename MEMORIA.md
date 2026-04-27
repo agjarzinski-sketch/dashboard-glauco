@@ -29,17 +29,19 @@ Controla faturas Nubank, saldo bancário e investimentos RDB.
 - 26/04/2026 — Tabela Supabase criada, SQL do CRM removido, auditoria do INSTRUCOES.md
 - 27/04/2026 — Levantamento completo da planilha Excel (33 abas), definição de 16 categorias e 120 subcategorias, criação de 7 tabelas no Supabase, seed de categorias, tela de Configurações > Categorias com CRUD completo
 - 27/04/2026 — Fase 2 concluída: Módulo de Lançamentos com CRUD de Entradas/Saídas, tabs, filtro mês/busca, formulário com selects encadeados categoria/subcategoria, parcelamento automático em entradas (gera N linhas preservando fim de mês) e edição/exclusão; estado de edição via form.dataset.editingId para robustez
+- 27/04/2026 — Fase 3 concluída: barra lateral fixa de navegação (220px, tema escuro). Itens: Dashboard, Lançamentos (subitens Entradas/Saídas), Cartão de Crédito, Gastos Fixos, Orçamento, Dívidas, Fluxo de Caixa, Configurações. Itens futuros desabilitados com badge "Em breve". Header simplificado (título + usuário). Rodapé da sidebar com resumo do mês corrente (entradas/saídas/saldo) lido do Supabase. navTo() coordena troca de telas; closeLancamentosScreen/closeCategoriasConfig sincronizam sidebar ao fechar pelo X.
 
 ## Fases concluídas
 - ✅ Fase 1 — Configurações > Categorias (CRUD de categorias e subcategorias)
 - ✅ Fase 2 — Módulo de Lançamentos (Entradas e Saídas)
+- ✅ Fase 3 — Barra lateral fixa de navegação com resumo do mês
 
 ## Pendências (em ordem de prioridade)
-- **Fase 3 (próxima):** Módulo de Cartão de Crédito item a item
-- Fase 4: Dashboard evoluído com breakdown por categoria e totais automáticos
-- Fase 5: Gastos Fixos Recorrentes
-- Fase 6: Orçamento / Planejamento semanal e mensal
-- Fase 7: Créditos e Débitos Futuros
-- Fase 8: Painel de Dívidas
-- Fase 9: Fluxo de Caixa Projetado
-- Fase 10: Histórico e importação da planilha
+- **Fase 4 (próxima):** Módulo de Cartão de Crédito item a item
+- Fase 5: Dashboard evoluído com breakdown por categoria e totais automáticos
+- Fase 6: Gastos Fixos Recorrentes
+- Fase 7: Orçamento / Planejamento semanal e mensal
+- Fase 8: Créditos e Débitos Futuros
+- Fase 9: Painel de Dívidas
+- Fase 10: Fluxo de Caixa Projetado
+- Fase 11: Histórico e importação da planilha
