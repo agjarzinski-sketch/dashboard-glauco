@@ -337,6 +337,7 @@ body{background:var(--bg);color:var(--text);font-family:'Courier New',monospace;
     <button class="month-tab" onclick="setMonth('abr',this)">ABR 2026</button>
     <button class="month-tab active" onclick="setMonth('mai',this)">MAI 2026</button>
   </div>
+  <button class="config-btn" onclick="openLancamentosScreen()" title="Lançamentos">📋</button>
   <button class="config-btn" onclick="openCategoriasConfig()" title="Configurações">⚙</button>
 </div>
 
@@ -1786,7 +1787,13 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
   const expanded = new Set();
 
   window.openCategoriasConfig = async function() {
+    // Fecha outro painel especial se estiver aberto, para garantir estado limpo
+    const lanc = document.getElementById('panel-lancamentos');
+    if (lanc && lanc.style.display !== 'none' && typeof window.closeLancamentosScreen === 'function') {
+      window.closeLancamentosScreen();
+    }
     document.querySelectorAll('.ds-panel:not(#panel-config-cats)').forEach(p => {
+      if (p.style.display === 'none') return; // já invisível — não tocar
       p.dataset._cfgHidden = '1';
       p.style.display = 'none';
     });
@@ -1971,6 +1978,503 @@ requestAnimationFrame(()=>requestAnimationFrame(()=>addArrowsToGrid('painelCards
     if (eDel) return alert('Erro: ' + eDel.message);
     if (s?.categoria_id) expanded.add(s.categoria_id);
     await loadCategoriasConfig();
+  };
+})();
+</script>
+
+<!-- ══ MÓDULO LANÇAMENTOS ════════════════════════════════════════════════════ -->
+<style>
+/* Tabs Entradas/Saídas */
+.lanc-tabs{display:flex;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:4px;margin-bottom:14px;width:fit-content;}
+.lanc-tab{padding:7px 18px;border-radius:7px;border:none;background:transparent;color:var(--muted);font-family:Arial,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;}
+.lanc-tab.active{background:var(--nu);color:#fff;}
+.lanc-tab:hover:not(.active){color:var(--text);}
+
+/* Toolbar de filtros */
+.lanc-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+.lanc-filters{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+.lanc-filters input[type="month"],.lanc-filters input[type="text"]{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:7px 10px;border-radius:7px;font-family:Arial,sans-serif;font-size:13px;outline:none;transition:border-color .15s;}
+.lanc-filters input:focus{border-color:var(--nu);}
+.lanc-filters input[type="text"]{min-width:220px;}
+.lanc-filters input[type="month"]{color-scheme:dark;}
+.lanc-btn-clear{background:transparent;border:1px solid var(--border);color:var(--muted);padding:7px 12px;border-radius:7px;font-family:Arial,sans-serif;font-size:12px;cursor:pointer;transition:all .15s;}
+.lanc-btn-clear:hover{color:var(--text);border-color:var(--nu);}
+
+/* Tabela de lançamentos */
+.lanc-tbl{width:100%;border-collapse:collapse;font-family:Arial,sans-serif;font-size:12px;}
+.lanc-tbl thead th{text-align:left;font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted);font-weight:700;padding:10px 8px;border-bottom:1px solid var(--border);}
+.lanc-tbl tbody td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.04);color:var(--text);vertical-align:top;}
+.lanc-tbl tbody tr:hover{background:rgba(139,92,246,.04);}
+.lanc-tx-data{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums;min-width:80px;}
+.lanc-tx-desc{font-weight:500;}
+.lanc-tx-cat{color:var(--muted);font-size:11px;}
+.lanc-tx-cat .lanc-sub{color:var(--muted);}
+.lanc-tx-val{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700;}
+.lanc-val-entrada{color:var(--green);}
+.lanc-val-saida{color:var(--red);}
+.lanc-tx-actions{white-space:nowrap;text-align:right;}
+.lanc-parcela{font-size:10px;color:var(--nu-light);background:rgba(139,92,246,.1);padding:1px 6px;border-radius:4px;margin-left:4px;}
+.lanc-status{display:inline-block;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}
+.lanc-status-confirmado{background:rgba(34,197,94,.12);color:var(--green);}
+.lanc-status-pendente{background:rgba(245,158,11,.12);color:var(--amber);}
+.lanc-totalrow td{border-top:2px solid var(--border);border-bottom:none !important;padding-top:14px !important;color:var(--text) !important;}
+.lanc-empty{color:var(--muted);font-size:12px;font-style:italic;padding:24px;text-align:center;}
+
+/* Modal */
+.lanc-modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center;padding:20px;}
+.lanc-modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;}
+.lanc-modal-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--surface);z-index:1;}
+.lanc-modal-title{font-family:Arial,sans-serif;font-size:14px;font-weight:700;color:var(--text);}
+.lanc-form{padding:18px;display:grid;gap:14px;}
+.lanc-field{display:flex;flex-direction:column;gap:6px;}
+.lanc-field>label{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-family:Arial,sans-serif;font-weight:700;}
+.lanc-field input[type="date"],.lanc-field input[type="text"],.lanc-field input[type="number"],.lanc-field select,.lanc-field textarea{background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:9px 12px;border-radius:7px;font-family:Arial,sans-serif;font-size:13px;outline:none;transition:border-color .15s;color-scheme:dark;}
+.lanc-field input:focus,.lanc-field select:focus,.lanc-field textarea:focus{border-color:var(--nu);}
+.lanc-field textarea{resize:vertical;min-height:60px;font-family:Arial,sans-serif;}
+.lanc-radio-group{display:flex;gap:14px;flex-wrap:wrap;}
+.lanc-radio-group label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;letter-spacing:0;font-weight:500;font-size:13px;color:var(--text);}
+.lanc-form-actions{display:flex;justify-content:flex-end;gap:10px;padding-top:6px;}
+.lanc-btn-secondary{background:transparent;border:1px solid var(--border);color:var(--muted);padding:8px 14px;border-radius:7px;font-family:Arial,sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
+.lanc-btn-secondary:hover{color:var(--text);border-color:var(--nu);}
+#lancParcelasInputs{display:flex;flex-direction:column;gap:6px;margin-top:8px;padding:10px;background:var(--bg);border-radius:7px;border:1px solid var(--border);}
+#lancParcelasInputs small{color:var(--muted);font-size:10px;line-height:1.4;}
+.lanc-parcelado-toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;color:var(--text);font-weight:500;text-transform:none;letter-spacing:0;}
+</style>
+
+<div class="ds-panel" id="panel-lancamentos" style="display:none">
+  <div class="ds-panel-bar">
+    <span class="ds-panel-title">📋 Lançamentos</span>
+    <div class="ds-panel-controls">
+      <button class="ds-toggle-btn" onclick="closeLancamentosScreen()" title="Voltar ao dashboard">✕</button>
+    </div>
+  </div>
+  <div class="ds-panel-body">
+    <div class="lanc-tabs">
+      <button class="lanc-tab active" data-tipo="entrada" onclick="setLancTipo('entrada',this)">↑ Entradas</button>
+      <button class="lanc-tab" data-tipo="saida" onclick="setLancTipo('saida',this)">↓ Saídas</button>
+    </div>
+    <div class="lanc-toolbar">
+      <div class="lanc-filters">
+        <input type="month" id="lancFiltroMes" title="Filtrar por mês" />
+        <input type="text" id="lancFiltroBusca" placeholder="Buscar descrição…" />
+        <button class="lanc-btn-clear" onclick="limparFiltrosLanc()">Limpar</button>
+      </div>
+      <button class="btn-cat-action" onclick="novoLancamento()">+ Novo Lançamento</button>
+    </div>
+    <div id="lancList"></div>
+    <div id="lancStatus" class="cat-config-status"></div>
+  </div>
+</div>
+
+<div class="lanc-modal-backdrop" id="lancModalBackdrop" style="display:none">
+  <div class="lanc-modal" onclick="event.stopPropagation()">
+    <div class="lanc-modal-header">
+      <span class="lanc-modal-title" id="lancModalTitle">Novo Lançamento</span>
+      <button class="ds-toggle-btn" onclick="fecharLancModal()" title="Fechar">✕</button>
+    </div>
+    <form id="lancForm" class="lanc-form" autocomplete="off">
+      <div class="lanc-field">
+        <label>Tipo</label>
+        <div class="lanc-radio-group">
+          <label><input type="radio" name="tipo" value="entrada" /> ↑ Entrada</label>
+          <label><input type="radio" name="tipo" value="saida" /> ↓ Saída</label>
+        </div>
+      </div>
+      <div class="lanc-field">
+        <label>Data</label>
+        <input type="date" name="data" required />
+      </div>
+      <div class="lanc-field">
+        <label>Descrição</label>
+        <input type="text" name="descricao" required maxlength="200" placeholder="Ex: Salário Hermes Capital" />
+      </div>
+      <div class="lanc-field">
+        <label>Valor (R$)</label>
+        <input type="number" name="valor" required step="0.01" min="0.01" placeholder="0,00" />
+      </div>
+      <div class="lanc-field">
+        <label>Categoria</label>
+        <select name="categoria_id" id="lancCategoriaSel"><option value="">— Sem categoria —</option></select>
+      </div>
+      <div class="lanc-field">
+        <label>Subcategoria</label>
+        <select name="subcategoria_id" id="lancSubcategoriaSel"><option value="">— Sem subcategoria —</option></select>
+      </div>
+      <div class="lanc-field">
+        <label>Status</label>
+        <div class="lanc-radio-group">
+          <label><input type="radio" name="status" value="confirmado" checked /> ✓ Confirmado</label>
+          <label><input type="radio" name="status" value="pendente" /> ⏳ Pendente</label>
+        </div>
+      </div>
+      <div class="lanc-field" id="lancParcelasField" style="display:none">
+        <label class="lanc-parcelado-toggle"><input type="checkbox" id="lancParcelado" /> Lançamento parcelado</label>
+        <div id="lancParcelasInputs" style="display:none">
+          <label style="font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);font-weight:700">Total de parcelas</label>
+          <input type="number" name="total_parcelas" min="2" max="60" placeholder="Ex: 12" />
+          <small>Será gerada uma linha por parcela. A data avança 1 mês a cada uma (preserva o último dia do mês quando o dia original não existe).</small>
+        </div>
+      </div>
+      <div class="lanc-field">
+        <label>Observação</label>
+        <textarea name="obs" maxlength="500" placeholder="Opcional"></textarea>
+      </div>
+      <div class="lanc-form-actions">
+        <button type="button" onclick="fecharLancModal()" class="lanc-btn-secondary">Cancelar</button>
+        <button type="submit" class="btn-cat-action" id="lancSubmitBtn">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+/* ── Módulo Lançamentos — CRUD via Supabase ──────────────────────────────── */
+(function(){
+  let tipoSel = 'entrada';
+  let categoriasCache = [];
+  let subcategoriasCache = [];
+  let editingId = null;
+
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+  function fmtBRL(v) {
+    const n = Number(v) || 0;
+    return 'R$ ' + n.toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  }
+  function fmtDataPt(iso) {
+    if (!iso) return '';
+    const [y,m,d] = String(iso).slice(0,10).split('-');
+    return `${d}/${m}/${y}`;
+  }
+  function avancaMeses(baseIso, n) {
+    // Avança N meses a partir de baseIso (YYYY-MM-DD), preservando o dia
+    // ou caindo no último dia do mês se o dia original não existir.
+    const [y,m,d] = baseIso.split('-').map(Number);
+    const totalMonths = (m - 1) + n;
+    const targetYear = y + Math.floor(totalMonths / 12);
+    const targetMonth = ((totalMonths % 12) + 12) % 12; // 0-indexed
+    const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+    const day = Math.min(d, lastDay);
+    return `${targetYear}-${String(targetMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  }
+  function getSb() {
+    if (!window.__supabase) {
+      alert('Supabase ainda não está pronto. Tente novamente em 1 segundo.');
+      return null;
+    }
+    return window.__supabase;
+  }
+
+  // ── Abrir / fechar tela ─────────────────────────────────────────────────
+  window.openLancamentosScreen = async function() {
+    // Fecha outro painel especial se estiver aberto, para garantir estado limpo
+    const cfg = document.getElementById('panel-config-cats');
+    if (cfg && cfg.style.display !== 'none' && typeof window.closeCategoriasConfig === 'function') {
+      window.closeCategoriasConfig();
+    }
+    document.querySelectorAll('.ds-panel:not(#panel-lancamentos)').forEach(p => {
+      if (p.style.display === 'none') return; // já invisível — não tocar
+      p.dataset._lancHidden = '1';
+      p.style.display = 'none';
+    });
+    document.querySelectorAll('.alert').forEach(a => { a.dataset._lancHidden = '1'; a.style.display = 'none'; });
+    const mt = document.querySelector('.month-tabs'); if (mt) { mt.dataset._lancHidden = '1'; mt.style.display = 'none'; }
+    const aud = document.getElementById('alertaAuditoriaSaldos'); if (aud) { aud.dataset._lancHidden = '1'; aud.style.display = 'none'; }
+    document.getElementById('panel-lancamentos').style.display = '';
+
+    // default mês = mês atual
+    const hoje = new Date();
+    const yyyy = hoje.getFullYear();
+    const mm = String(hoje.getMonth() + 1).padStart(2,'0');
+    if (!document.getElementById('lancFiltroMes').value) {
+      document.getElementById('lancFiltroMes').value = `${yyyy}-${mm}`;
+    }
+
+    await carregarCategoriasCache();
+    await renderListaLancamentos();
+  };
+
+  window.closeLancamentosScreen = function() {
+    document.querySelectorAll('[data-_lanc-hidden],[data-_lancHidden]').forEach(el => {
+      el.style.display = '';
+      delete el.dataset._lancHidden;
+    });
+    document.getElementById('panel-lancamentos').style.display = 'none';
+  };
+
+  // ── Tabs ────────────────────────────────────────────────────────────────
+  window.setLancTipo = function(tipo, btn) {
+    tipoSel = tipo;
+    document.querySelectorAll('.lanc-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    renderListaLancamentos();
+  };
+
+  // ── Filtros ─────────────────────────────────────────────────────────────
+  document.getElementById('lancFiltroMes').addEventListener('change', renderListaLancamentos);
+  document.getElementById('lancFiltroBusca').addEventListener('input', renderListaLancamentos);
+  window.limparFiltrosLanc = function() {
+    document.getElementById('lancFiltroMes').value = '';
+    document.getElementById('lancFiltroBusca').value = '';
+    renderListaLancamentos();
+  };
+
+  // ── Cache de categorias / subcategorias ─────────────────────────────────
+  async function carregarCategoriasCache() {
+    const sb = getSb(); if (!sb) return;
+    const [cats, subs] = await Promise.all([
+      sb.from('categorias').select('*').eq('ativo', true).order('nome'),
+      sb.from('subcategorias').select('*').eq('ativo', true).order('nome')
+    ]);
+    categoriasCache = cats.data || [];
+    subcategoriasCache = subs.data || [];
+  }
+
+  // ── Render lista ────────────────────────────────────────────────────────
+  async function renderListaLancamentos() {
+    const list = document.getElementById('lancList');
+    const status = document.getElementById('lancStatus');
+    list.innerHTML = '';
+    status.innerHTML = '<span style="color:var(--muted)">Carregando…</span>';
+
+    const sb = getSb(); if (!sb) return;
+
+    let q = sb.from('lancamentos').select('*').eq('tipo', tipoSel).order('data', { ascending: false });
+
+    const mesVal = document.getElementById('lancFiltroMes').value;
+    if (mesVal) {
+      const [yyyy, mm] = mesVal.split('-');
+      const start = `${yyyy}-${mm}-01`;
+      const lastDay = new Date(parseInt(yyyy,10), parseInt(mm,10), 0).getDate();
+      const end = `${yyyy}-${mm}-${String(lastDay).padStart(2,'0')}`;
+      q = q.gte('data', start).lte('data', end);
+    }
+
+    const { data, error } = await q;
+    if (error) {
+      status.innerHTML = `<span style="color:var(--red)">Erro: ${escapeHtml(error.message)}</span>`;
+      return;
+    }
+
+    const busca = document.getElementById('lancFiltroBusca').value.trim().toLowerCase();
+    let filtered = data || [];
+    if (busca) filtered = filtered.filter(l => (l.descricao || '').toLowerCase().includes(busca));
+
+    const catNome = Object.fromEntries(categoriasCache.map(c => [c.id, c.nome]));
+    const subNome = Object.fromEntries(subcategoriasCache.map(s => [s.id, s.nome]));
+    const labelTipo = tipoSel === 'entrada' ? 'entrada' : 'saída';
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div class="lanc-empty">Nenhuma ${labelTipo} encontrada${mesVal ? ' para o período' : ''}${busca ? ' com esse termo' : ''}.</div>`;
+      status.innerHTML = `<span style="color:var(--muted)">0 ${labelTipo}s</span>`;
+      return;
+    }
+
+    let total = 0;
+    let linhas = '';
+    for (const l of filtered) {
+      total += Number(l.valor) || 0;
+      const cat = l.categoria_id ? (catNome[l.categoria_id] || '—') : '—';
+      const sub = l.subcategoria_id ? (subNome[l.subcategoria_id] || '') : '';
+      const catFull = sub
+        ? `${escapeHtml(cat)} <span class="lanc-sub">› ${escapeHtml(sub)}</span>`
+        : escapeHtml(cat);
+      const parcInfo = (l.parcela_atual && l.total_parcelas)
+        ? ` <span class="lanc-parcela">${l.parcela_atual}/${l.total_parcelas}</span>`
+        : '';
+      const statusCls = l.status === 'pendente' ? 'lanc-status-pendente' : 'lanc-status-confirmado';
+      const statusLbl = l.status === 'pendente' ? 'Pendente' : 'Confirmado';
+      const valCls = tipoSel === 'entrada' ? 'lanc-val-entrada' : 'lanc-val-saida';
+      const sinal = tipoSel === 'entrada' ? '+' : '−';
+      linhas += `<tr>
+        <td class="lanc-tx-data">${fmtDataPt(l.data)}</td>
+        <td class="lanc-tx-desc">${escapeHtml(l.descricao || '')}${parcInfo}</td>
+        <td class="lanc-tx-cat">${catFull}</td>
+        <td class="lanc-tx-val ${valCls}">${sinal} ${fmtBRL(l.valor)}</td>
+        <td><span class="lanc-status ${statusCls}">${statusLbl}</span></td>
+        <td class="lanc-tx-actions">
+          <button class="cat-btn" onclick="editLancamento('${l.id}')" title="Editar">✏</button>
+          <button class="cat-btn cat-btn-danger" onclick="deleteLancamento('${l.id}')" title="Excluir">✕</button>
+        </td>
+      </tr>`;
+    }
+
+    const totalCls = tipoSel === 'entrada' ? 'lanc-val-entrada' : 'lanc-val-saida';
+    list.innerHTML = `<table class="lanc-tbl">
+      <thead><tr>
+        <th>Data</th><th>Descrição</th><th>Categoria</th>
+        <th class="lanc-tx-val">Valor</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>${linhas}
+        <tr class="lanc-totalrow">
+          <td colspan="3" style="text-align:right;font-weight:700">Total do período</td>
+          <td class="lanc-tx-val ${totalCls}">${fmtBRL(total)}</td>
+          <td colspan="2"></td>
+        </tr>
+      </tbody>
+    </table>`;
+    status.innerHTML = `<span style="color:var(--muted)">${filtered.length} ${labelTipo}${filtered.length === 1 ? '' : 's'} · Total: ${fmtBRL(total)}</span>`;
+  }
+
+  // ── Modal ───────────────────────────────────────────────────────────────
+  window.novoLancamento = function() {
+    editingId = null;
+    document.getElementById('lancModalTitle').textContent = 'Novo Lançamento';
+    const form = document.getElementById('lancForm');
+    form.reset();
+    form.querySelector(`input[name="tipo"][value="${tipoSel}"]`).checked = true;
+    form.querySelector('input[name="data"]').value = new Date().toISOString().slice(0,10);
+    form.querySelector('input[name="status"][value="confirmado"]').checked = true;
+    document.getElementById('lancParcelado').checked = false;
+    document.getElementById('lancParcelado').disabled = false;
+    document.getElementById('lancParcelasInputs').style.display = 'none';
+    atualizarFormPorTipo();
+    document.getElementById('lancModalBackdrop').style.display = 'flex';
+  };
+
+  window.editLancamento = async function(id) {
+    const sb = getSb(); if (!sb) return;
+    const { data: l, error } = await sb.from('lancamentos').select('*').eq('id', id).single();
+    if (error) return alert('Erro: ' + error.message);
+
+    editingId = id;
+    document.getElementById('lancModalTitle').textContent = 'Editar Lançamento';
+    const form = document.getElementById('lancForm');
+    form.reset();
+    form.querySelector(`input[name="tipo"][value="${l.tipo}"]`).checked = true;
+    form.querySelector('input[name="data"]').value = l.data ? String(l.data).slice(0,10) : '';
+    form.querySelector('input[name="descricao"]').value = l.descricao || '';
+    form.querySelector('input[name="valor"]').value = l.valor;
+    form.querySelector(`input[name="status"][value="${l.status === 'pendente' ? 'pendente' : 'confirmado'}"]`).checked = true;
+    form.querySelector('textarea[name="obs"]').value = l.obs || '';
+
+    atualizarFormPorTipo();
+    if (l.categoria_id) {
+      document.getElementById('lancCategoriaSel').value = l.categoria_id;
+      atualizarSubcategoriaSel();
+      if (l.subcategoria_id) document.getElementById('lancSubcategoriaSel').value = l.subcategoria_id;
+    }
+
+    // edição não permite recriar parcelas
+    document.getElementById('lancParcelado').checked = false;
+    document.getElementById('lancParcelado').disabled = true;
+    document.getElementById('lancParcelasInputs').style.display = 'none';
+
+    document.getElementById('lancModalBackdrop').style.display = 'flex';
+  };
+
+  window.fecharLancModal = function() {
+    document.getElementById('lancModalBackdrop').style.display = 'none';
+    document.getElementById('lancParcelado').disabled = false;
+    editingId = null;
+  };
+
+  // Fecha modal ao clicar fora
+  document.getElementById('lancModalBackdrop').addEventListener('click', function(e) {
+    if (e.target === this) window.fecharLancModal();
+  });
+
+  function atualizarFormPorTipo() {
+    const tipo = document.querySelector('#lancForm input[name="tipo"]:checked')?.value || tipoSel;
+    const tiposOk = tipo === 'entrada' ? ['entrada','ambos'] : ['saida','ambos'];
+    const cats = categoriasCache.filter(c => tiposOk.includes(c.tipo));
+    const sel = document.getElementById('lancCategoriaSel');
+    sel.innerHTML = '<option value="">— Sem categoria —</option>' +
+      cats.map(c => `<option value="${c.id}">${escapeHtml(c.nome)}</option>`).join('');
+    document.getElementById('lancSubcategoriaSel').innerHTML = '<option value="">— Sem subcategoria —</option>';
+    // parcelas só em entrada e só em criação (não edição)
+    document.getElementById('lancParcelasField').style.display = (tipo === 'entrada' && !editingId) ? '' : 'none';
+  }
+
+  function atualizarSubcategoriaSel() {
+    const catId = document.getElementById('lancCategoriaSel').value;
+    const subs = subcategoriasCache.filter(s => s.categoria_id === catId);
+    document.getElementById('lancSubcategoriaSel').innerHTML =
+      '<option value="">— Sem subcategoria —</option>' +
+      subs.map(s => `<option value="${s.id}">${escapeHtml(s.nome)}</option>`).join('');
+  }
+
+  document.querySelectorAll('#lancForm input[name="tipo"]').forEach(r => {
+    r.addEventListener('change', atualizarFormPorTipo);
+  });
+  document.getElementById('lancCategoriaSel').addEventListener('change', atualizarSubcategoriaSel);
+  document.getElementById('lancParcelado').addEventListener('change', e => {
+    document.getElementById('lancParcelasInputs').style.display = e.target.checked ? '' : 'none';
+  });
+
+  // ── Submit (criar ou atualizar) ─────────────────────────────────────────
+  document.getElementById('lancForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const sb = getSb(); if (!sb) return;
+    const btn = document.getElementById('lancSubmitBtn');
+    btn.disabled = true;
+    const labelOriginal = btn.textContent;
+    btn.textContent = 'Salvando…';
+
+    try {
+      const f = e.target;
+      const tipo = f.querySelector('input[name="tipo"]:checked')?.value;
+      const data = f.querySelector('input[name="data"]').value;
+      const descricao = f.querySelector('input[name="descricao"]').value.trim();
+      const valor = parseFloat(f.querySelector('input[name="valor"]').value);
+      const categoria_id = f.querySelector('select[name="categoria_id"]').value || null;
+      const subcategoria_id = f.querySelector('select[name="subcategoria_id"]').value || null;
+      const status = f.querySelector('input[name="status"]:checked')?.value;
+      const obs = f.querySelector('textarea[name="obs"]').value.trim() || null;
+
+      if (!tipo || !data || !descricao || !valor || valor <= 0 || !status) {
+        alert('Preencha tipo, data, descrição, valor (>0) e status.');
+        return;
+      }
+
+      const ehParcelado = !editingId && tipo === 'entrada' && document.getElementById('lancParcelado').checked;
+
+      if (editingId) {
+        const { error } = await sb.from('lancamentos').update({
+          tipo, data, descricao, valor, categoria_id, subcategoria_id, status, obs
+        }).eq('id', editingId);
+        if (error) throw error;
+      } else if (ehParcelado) {
+        const total_parcelas = parseInt(f.querySelector('input[name="total_parcelas"]').value, 10);
+        if (!total_parcelas || total_parcelas < 2 || total_parcelas > 60) {
+          alert('Total de parcelas deve estar entre 2 e 60.');
+          return;
+        }
+        const linhas = [];
+        for (let i = 0; i < total_parcelas; i++) {
+          linhas.push({
+            tipo, data: avancaMeses(data, i),
+            descricao, valor, categoria_id, subcategoria_id, status, obs,
+            parcela_atual: i + 1, total_parcelas
+          });
+        }
+        const { error } = await sb.from('lancamentos').insert(linhas);
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from('lancamentos').insert({
+          tipo, data, descricao, valor, categoria_id, subcategoria_id, status, obs
+        });
+        if (error) throw error;
+      }
+
+      window.fecharLancModal();
+      await renderListaLancamentos();
+    } catch (err) {
+      alert('Erro ao salvar: ' + (err?.message || err));
+    } finally {
+      btn.disabled = false;
+      btn.textContent = labelOriginal;
+    }
+  });
+
+  // ── Delete ──────────────────────────────────────────────────────────────
+  window.deleteLancamento = async function(id) {
+    if (!confirm('Excluir este lançamento? Esta ação não pode ser desfeita.')) return;
+    const sb = getSb(); if (!sb) return;
+    const { error } = await sb.from('lancamentos').delete().eq('id', id);
+    if (error) return alert('Erro: ' + error.message);
+    await renderListaLancamentos();
   };
 })();
 </script>
