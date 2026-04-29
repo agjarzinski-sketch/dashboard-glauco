@@ -186,5 +186,38 @@ create policy "acesso público dashboard"
 
 ---
 
+## Integração com Obsidian
+
+- **Vault Obsidian:** `C:\Users\Note\Documents\Obsidian\MeuVault`
+- **Nota principal:** `10 - Projetos Pessoais/Controle de Gastos Mensais 2.0.md`
+
+### Regra obrigatória ao fim de cada sessão
+
+Ao encerrar qualquer sessão de desenvolvimento, você DEVE:
+
+1. Identificar o que foi feito nesta sessão.
+2. Atualizar o arquivo:
+   `C:\Users\Note\Documents\Obsidian\MeuVault\10 - Projetos Pessoais\Controle de Gastos Mensais 2.0.md`
+3. A atualização deve:
+   - Marcar tarefas concluídas com `[x]` em **✅ Próximos Passos**.
+   - Adicionar novas tarefas pendentes identificadas.
+   - Adicionar log na seção **📝 Notas** no formato:
+
+         ### Log YYYY-MM-DD
+         - O que foi feito
+         - Decisões tomadas
+         - Problemas encontrados
+
+   - Atualizar status dos módulos se algum foi concluído.
+4. Confirmar com: `✅ Obsidian atualizado — Controle de Gastos Mensais 2.0`
+
+### Módulos do projeto
+
+- Lançamentos
+- Barra Lateral
+- Gastos Fixos e Créditos
+
+---
+
 *Gerado por Claude · Anthropic · 25/04/2026*
 *Inventário completo: G:\Meu Drive\02 - Projetos\Dashboard-Glauco\inventario-dashboard-glauco.docx*
